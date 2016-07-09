@@ -102,13 +102,15 @@ static PyObject *M_Curve_fit_nd_curve_from_points(PyObject *self, PyObject *args
 
 	double *cubic_array = NULL;
 	unsigned int cubic_array_len = 0;
+	unsigned int *cubic_orig_index = NULL;
 
 	if (curve_fit_cubic_to_points_db(
 	        points_data, points_len, dims, error_threshold, 0,
 	        NULL, 0,
 
 	        &cubic_array, &cubic_array_len,
-	        NULL, NULL, NULL) != 0)
+	        &cubic_orig_index,
+	        NULL, NULL) != 0)
 	{
 
 		PyErr_SetString(PyExc_ValueError, "error fitting the curve");
@@ -131,9 +133,16 @@ static PyObject *M_Curve_fit_nd_curve_from_points(PyObject *self, PyObject *args
 			}
 			PyTuple_SET_ITEM(item, h, item_point);
 		}
-		PyList_SET_ITEM(ret, i, item);
+
+		PyObject *item_pair = PyTuple_New(2);
+		PyTuple_SET_ITEM(item_pair, 0, PyLong_FromLong((long)cubic_orig_index[i]));
+		PyTuple_SET_ITEM(item_pair, 1, item);
+		PyList_SET_ITEM(ret, i, item_pair);
 	}
 	assert(c == (cubic_array + (cubic_array_len * dims * 3)));
+
+	free(cubic_array);
+	free(cubic_orig_index);
 
 	return ret;
 }
