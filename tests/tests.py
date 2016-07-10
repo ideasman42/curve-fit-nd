@@ -6,6 +6,62 @@ Example of watching a single test:
 
 import os
 import sys
+import math
+
+# ----------------------------------------------------------------------------
+# Math functions
+
+
+def sub_vnvn(v0, v1):
+    return tuple(a - b for a, b in zip(v0, v1))
+
+
+def dot_vnvn(v0, v1):
+    return sum(a * b for a, b in zip(v0, v1))
+
+
+def closest_to_line_vn(p, l1, l2):
+    u = sub_vnvn(l2, l1)
+    h = sub_v3vn(p, l1)
+    l = dot_vnvn(u, h) / dot_vnvn(u, u)
+    cp = tuple(l1_axis + (u_axis * l) for l1_axis, u_axis in zip(l1, u))
+    return cp, l
+
+
+def closest_to_line_segment_vn(p, l1, l2):
+    cp, fac = closest_to_line_vn(p, l1, l2)
+    # flip checks for !finite case (when segment is a point)
+    if not (fac > 0.0):
+        return l1
+    elif not (fac < 1.0):
+        return l2
+    else:
+        return cp
+
+
+def dist_squared_to_line_segment_vn(p, l1, l2):
+    closest = closest_to_line_segment_vn(closest, p, l1, l2);
+    return len_squared_vnvn(closest, p)
+
+
+def interp_vnvn(v0, v1, t):
+    s = 1.0 - t
+    return tuple(s * a + t * b for a, b in zip(v0, v1))
+
+
+def interp_cubic_vn(v0, v1, v2, v3, u):
+    q0 = interp_vnvn(v0, v1, u)
+    q1 = interp_vnvn(v1, v2, u)
+    q2 = interp_vnvn(v2, v3, u)
+
+    r0 = interp_vnvn(q0, q1, u)
+    r1 = interp_vnvn(q1, q2, u)
+
+    return interp_vnvn(r0, r1, u)
+
+
+# ----------------------------------------------------------------------------
+
 
 import unittest
 
@@ -63,7 +119,7 @@ def export_svg(name, s, points):
 
         if s:
             fw('<g stroke="white" stroke-opacity="0.25" stroke-width="1">\n')
-            for v0, v1 in iter_pairs(s):
+            for (i0, v0), (i1, v1) in iter_pairs(s):
                 k0 = v0[1][0] * scale, -v0[1][1] * scale
                 h0 = v0[2][0] * scale, -v0[2][1] * scale
 
@@ -87,14 +143,14 @@ def export_svg(name, s, points):
 
         if s:
             fw('<g fill="white" fill-opacity="0.5" stroke="white" stroke-opacity="0.5" stroke-width="1">\n')
-            for p in s:
+            for i, p in s:
                 for v in p:
                     fw('<circle cx="%.4f" cy="%.4f" r="2"/>\n' %
                     (v[0] * scale, -v[1] * scale))
 
             # lines
             fw('<g stroke="white" stroke-opacity="0.5" stroke-width="1">\n')
-            for v0, v1, v2 in s:
+            for i, (v0, v1, v2) in s:
                 fw('<line x1="%.4f" y1="%.4f" x2="%.4f" y2="%.4f" />\n' %
                 (v0[0] * scale, -v0[1] * scale, v1[0] * scale, -v1[1] * scale))
                 fw('<line x1="%.4f" y1="%.4f" x2="%.4f" y2="%.4f" />\n' %
@@ -106,6 +162,31 @@ def export_svg(name, s, points):
 
 
         fw('</svg>')
+
+
+def dist_squared_to_line_vn(p, points):
+    # warning, slow!
+    m = len_squared_vnvn(points[0], p)
+    for v0, v1 in iter_pairs(points):
+        m = min(dist_squared_to_line_segment_vn(p, v1, v2))
+    return m
+
+
+def curve_error_calc(points, curve):
+
+    for v0, v1 in iter_pairs(s):
+        k0 = v0[1], -v0[1]
+        h0 = v0[2], -v0[2]
+
+        k1 = v1[0], -v1[0]
+        h1 = v1[1], -v1[1]
+
+        samples = 8
+        for i in range(1, samples):
+            fac = i / samples
+
+            v_sample = interp_cubic_vn(k0, h0, h1, k1)
+
 
 
 def curve_fit_compare(s, error):
@@ -125,6 +206,8 @@ class TestDataFile_Helper:
         if USE_SVG:
             export_svg(name, curve, points)
         # print(name + ix_id)
+
+        # err = curve_error_max(points, curve)
 
         '''
         if 0:
