@@ -20,33 +20,22 @@ def dot_vnvn(v0, v1):
     return sum(a * b for a, b in zip(v0, v1))
 
 
-def closest_to_line_vn(p, l1, l2):
-    u = sub_vnvn(l2, l1)
-    h = sub_v3vn(p, l1)
-    l = dot_vnvn(u, h) / dot_vnvn(u, u)
-    cp = tuple(l1_axis + (u_axis * l) for l1_axis, u_axis in zip(l1, u))
-    return cp, l
+def len_squared_vn(v0):
+    return dot_vnvn(v0, v0)
 
 
-def closest_to_line_segment_vn(p, l1, l2):
-    cp, fac = closest_to_line_vn(p, l1, l2)
-    # flip checks for !finite case (when segment is a point)
-    if not (fac > 0.0):
-        return l1
-    elif not (fac < 1.0):
-        return l2
-    else:
-        return cp
+def len_squared_vnvn(v0, v1):
+    d = sub_vnvn(v0, v1)
+    return len_squared_vn(d)
 
 
-def dist_squared_to_line_segment_vn(p, l1, l2):
-    closest = closest_to_line_segment_vn(closest, p, l1, l2);
-    return len_squared_vnvn(closest, p)
+def len_vnvn(v0, v1):
+    return math.sqrt(len_squared_vnvn(v0, v1))
 
 
 def interp_vnvn(v0, v1, t):
     s = 1.0 - t
-    return tuple(s * a + t * b for a, b in zip(v0, v1))
+    return tuple((s * a) + (t * b) for a, b in zip(v0, v1))
 
 
 def interp_cubic_vn(v0, v1, v2, v3, u):
@@ -62,6 +51,10 @@ def interp_cubic_vn(v0, v1, v2, v3, u):
 
 # ----------------------------------------------------------------------------
 
+# refine error calculation
+USE_REFINE = True
+REFINE_STEPS = 6
+REFINE_SHRINK = 0.5
 
 import unittest
 
@@ -76,7 +69,6 @@ sys.path.append(TEST_DATA_PATH)
 
 
 def iter_pairs(iterable):
-    '''
     it = iter(iterable)
     prev_ = next(it)
     while True:
@@ -86,12 +78,9 @@ def iter_pairs(iterable):
             return
         yield (prev_, next_)
         prev_ = next_
-    '''
-    for i in range(1, len(iterable)):
-        yield (iterable[i - 1], iterable[i])
 
 
-def export_svg(name, s, points):
+def export_svg(name, s, points, measure_points):
     # write svg's to tests dir for now
     dirname = os.path.join(TEST_DATA_PATH, "..", "data_svg")
     os.makedirs(dirname, exist_ok=True)
@@ -123,14 +112,14 @@ def export_svg(name, s, points):
                 k0 = v0[1][0] * scale, -v0[1][1] * scale
                 h0 = v0[2][0] * scale, -v0[2][1] * scale
 
-                k1 = v1[0][0] * scale, -v1[0][1] * scale
-                h1 = v1[1][0] * scale, -v1[1][1] * scale
+                h1 = v1[0][0] * scale, -v1[0][1] * scale
+                k1 = v1[1][0] * scale, -v1[1][1] * scale
 
                 fw('<path d="M%.4f,%.4f C%.4f,%.4f %.4f,%.4f %.4f,%.4f" />\n' %
                    (k0[0], k0[1],
                     h0[0], h0[1],
-                    k1[0], k1[1],
                     h1[0], h1[1],
+                    k1[0], k1[1],
                     ))
                 # <path d="M100,250 C100,100 400,100 400,250" />
             fw('</g>\n')
@@ -147,6 +136,8 @@ def export_svg(name, s, points):
                 for v in p:
                     fw('<circle cx="%.4f" cy="%.4f" r="2"/>\n' %
                     (v[0] * scale, -v[1] * scale))
+            fw('</g>\n')
+
 
             # lines
             fw('<g stroke="white" stroke-opacity="0.5" stroke-width="1">\n')
@@ -157,41 +148,96 @@ def export_svg(name, s, points):
                 (v1[0] * scale, -v1[1] * scale, v2[0] * scale, -v2[1] * scale))
             fw('</g>\n')
 
-
+        if measure_points:
+            fw('<g stroke="white" stroke-opacity="0.5" stroke-width="0.5">\n')
+            for e0, e1 in measure_points:
+                fw('<line x1="%.4f" y1="%.4f" x2="%.4f" y2="%.4f" />\n' %
+                (e0[0] * scale, -e0[1] * scale, e1[0] * scale, -e1[1] * scale))
             fw('</g>\n')
-
 
         fw('</svg>')
 
 
-def dist_squared_to_line_vn(p, points):
-    # warning, slow!
-    m = len_squared_vnvn(points[0], p)
-    for v0, v1 in iter_pairs(points):
-        m = min(dist_squared_to_line_segment_vn(p, v1, v2))
-    return m
-
-
-def curve_error_calc(points, curve):
-
-    for v0, v1 in iter_pairs(s):
-        k0 = v0[1], -v0[1]
-        h0 = v0[2], -v0[2]
-
-        k1 = v1[0], -v1[0]
-        h1 = v1[1], -v1[1]
-
-        samples = 8
-        for i in range(1, samples):
-            fac = i / samples
-
-            v_sample = interp_cubic_vn(k0, h0, h1, k1)
-
-
-
-def curve_fit_compare(s, error):
+def curve_fit(s, error):
     c = curve_fit_nd.curve_from_points(s, error)
     return c
+
+
+def curve_error_max(points, curve, r_measure_points):
+    error_max_sq = 0.0
+    for (i0, v0), (i1, v1) in iter_pairs(curve):
+        k0 = v0[1]
+        h0 = v0[2]
+
+        h1 = v1[0]
+        k1 = v1[1]
+
+        lens = [None] * (i1 - i0)
+        lens_accum = 0.0
+        for i, (s0, s1) in enumerate(iter_pairs(range(i0, i1 + 1))):
+            lens[i] = lens_accum
+            lens_accum += len_vnvn(points[s0], points[s1])
+
+        lens[:] = [l / lens[-1] for l in lens]
+
+        for i, s in enumerate(range(i0, i1)):
+            u = lens[i]
+            p_real = points[s]
+            p_curve = interp_cubic_vn(k0, h0, h1, k1, u)
+
+            # step up and down the cubic to reach a close point
+            if USE_REFINE:
+                error_best = len_squared_vnvn(p_real, p_curve)
+
+                u_step = 0.0
+                u_tot = 0.0
+                if i != 0:
+                    u_step += lens[i - 1] - u
+                    # assert(u - lens[i - 1] >= 0.0)
+                    u_tot += 1.0
+                if i != len(lens) - 1:
+                    u_step += u - lens[i + 1]
+                    # assert(lens[i + 1] - u >= 0.0)
+                    u_tot += 1.0
+
+                u_step /= u_tot
+
+                # refine, start at half
+                u_step *= REFINE_SHRINK
+
+                u_best = u
+                p_best = p_curve
+                refine_count = 0
+
+
+                while True:
+                    u_init = u_best
+                    for u_test in (u_best + u_step, u_best - u_step):
+                        p_test = interp_cubic_vn(k0, h0, h1, k1, u_test)
+                        error_test = len_squared_vnvn(p_real, p_test)
+                        if error_test < error_best:
+                            error_best = error_test
+                            u_best = u_test
+                            p_best = p_test
+
+                    if u_init == u_best:
+                        refine_count += 1
+                        if refine_count == REFINE_STEPS:
+                            break
+                        else:
+                            # refine further
+                            u_step *= REFINE_SHRINK
+                error_max_sq = max(error_max_sq, error_best)
+                p_curve = p_best
+                # end USE_REFINE
+
+            else:
+                error_max_sq = max(error_max_sq, len_squared_vnvn(p_real, p_curve))
+
+
+            r_measure_points.append((p_real, p_curve))
+
+    return math.sqrt(error_max_sq)
 
 
 def test_data_load(name):
@@ -202,24 +248,18 @@ class TestDataFile_Helper:
 
     def assertTestData(self, name, error):
         points = test_data_load(name)
-        curve = curve_fit_compare(points, error)
-        if USE_SVG:
-            export_svg(name, curve, points)
+        curve = curve_fit(points, error)
         # print(name + ix_id)
 
-        # err = curve_error_max(points, curve)
+        measure_points = []
+        error_test = curve_error_max(points, curve, measure_points)
+        # print(error_test, error)
 
-        '''
-        if 0:
-            # simple but we can get more useful output
-            self.assertEqual(ix_final, ix_naive)
-        else:
-            # prints intersect points where differ,
-            # more useful for debugging.
-            ix_final_only = tuple(sorted(set(ix_final) - set(ix_naive)))
-            ix_naive_only = tuple(sorted(set(ix_naive) - set(ix_final)))
-            self.assertEqual((len(ix_final), ix_final_only, ix_naive_only), (len(ix_naive), (), ()))
-        '''
+        if USE_SVG:
+            export_svg(name, curve, points, measure_points)
+
+        # scale the error up to allow for some minor discrepancy in USE_REFINE
+        self.assertLess(error_test, error * 1.1)
 
 
 class FreehandTest(unittest.TestCase, TestDataFile_Helper):
