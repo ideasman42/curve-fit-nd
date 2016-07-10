@@ -269,3 +269,6 @@ class FreehandTest(unittest.TestCase, TestDataFile_Helper):
 
     def test_curve_01(self):
         self.assertTestData("test_curve_freehand_01", 0.01)
+
+    def test_curve_02(self):
+        self.assertTestData("test_curve_freehand_02", 0.01)
