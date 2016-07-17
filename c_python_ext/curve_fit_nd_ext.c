@@ -3,6 +3,8 @@
 
 #include "curve_fit_nd.h"
 
+#define DEG2RAD(_deg) ((_deg) * (M_PI / 180.0))
+
 PyDoc_STRVAR(M_Curve_fit_nd_doc,
 "TODO\n"
 );
@@ -28,12 +30,13 @@ static PyObject *M_Curve_fit_nd_curve_from_points(PyObject *self, PyObject *args
 	PyObject *points;
 	PyObject *points_fast;
 	double error_threshold;
+	double corner_angle = M_PI;
 
 
 	if (!PyArg_ParseTuple(
-	        args, "Od:curve_from_points",
+	        args, "Od|d:curve_from_points",
 	        &points,
-	        &error_threshold) ||
+	        &error_threshold, &corner_angle) ||
 	    !(points_fast = PySequence_Fast(points, error_prefix)))
 	{
 		return NULL;
@@ -104,6 +107,7 @@ static PyObject *M_Curve_fit_nd_curve_from_points(PyObject *self, PyObject *args
 	unsigned int cubic_array_len = 0;
 	unsigned int *cubic_orig_index = NULL;
 
+#if 0
 	if (curve_fit_cubic_to_points_db(
 	        points_data, points_len, dims, error_threshold, 0,
 	        NULL, 0,
@@ -111,6 +115,15 @@ static PyObject *M_Curve_fit_nd_curve_from_points(PyObject *self, PyObject *args
 	        &cubic_array, &cubic_array_len,
 	        &cubic_orig_index,
 	        NULL, NULL) != 0)
+#else
+	if (curve_fit_cubic_to_points_incremental_db(
+	        points_data, points_len, dims, error_threshold, 0,
+	        NULL, 0,
+	        corner_angle,  /* only difference! */
+	        &cubic_array, &cubic_array_len,
+	        &cubic_orig_index,
+	        NULL, NULL) != 0)
+#endif
 	{
 
 		PyErr_SetString(PyExc_ValueError, "error fitting the curve");

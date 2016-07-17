@@ -158,8 +158,10 @@ def export_svg(name, s, points, measure_points):
         fw('</svg>')
 
 
-def curve_fit(s, error):
-    c = curve_fit_nd.curve_from_points(s, error)
+def curve_fit(s, error, corner_angle):
+    if corner_angle is None:
+        corner_angle = 10
+    c = curve_fit_nd.curve_from_points(s, error, corner_angle)
     return c
 
 
@@ -246,9 +248,9 @@ def test_data_load(name):
 
 class TestDataFile_Helper:
 
-    def assertTestData(self, name, error):
+    def assertTestData(self, name, error, corner_angle=None):
         points = test_data_load(name)
-        curve = curve_fit(points, error)
+        curve = curve_fit(points, error, corner_angle)
         # print(name + ix_id)
 
         measure_points = []
@@ -272,3 +274,6 @@ class FreehandTest(unittest.TestCase, TestDataFile_Helper):
 
     def test_curve_02(self):
         self.assertTestData("test_curve_freehand_02", 0.01)
+
+    def test_curve_03(self):
+        self.assertTestData("test_curve_freehand_03", 0.01, math.radians(30))

@@ -123,6 +123,37 @@ enum {
 	CURVE_FIT_CALC_HIGH_QUALIY          = (1 << 0),
 };
 
+
+/* curve_fit_cubic_incremental.c */
+
+int curve_fit_cubic_to_points_incremental_db(
+        const double         *points,
+        const unsigned int    points_len,
+        const unsigned int    dims,
+        const double          error_threshold,
+        const unsigned int    calc_flag,
+        const unsigned int   *corners,
+        unsigned int          corners_len,
+        const double          corner_angle,
+
+        double **r_cubic_array, unsigned int *r_cubic_array_len,
+        unsigned int   **r_cubic_orig_index,
+        unsigned int   **r_corner_index_array, unsigned int *r_corner_index_len);
+
+int curve_fit_cubic_to_points_incremental_fl(
+        const float          *points,
+        const unsigned int    points_len,
+        const unsigned int    dims,
+        const float           error_threshold,
+        const unsigned int    calc_flag,
+        const unsigned int   *corners,
+        unsigned int          corners_len,
+        const float           corner_angle,
+
+        float **r_cubic_array, unsigned int *r_cubic_array_len,
+        unsigned int   **r_cubic_orig_index,
+        unsigned int   **r_corner_index_array, unsigned int *r_corner_index_len);
+
 /* curve_fit_corners_detect.c */
 
 /**
