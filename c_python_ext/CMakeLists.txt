@@ -26,7 +26,6 @@ if(MSVC)
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /J")
 endif()
 
-
 # -----------------------------------------------------------------------------
 # configure python
 
@@ -69,9 +68,16 @@ set(PYTHON_INCLUDE_DIRS "${PYTHON_INCLUDE_DIR}")
 
 set(SRC
 	../c/intern/curve_fit_cubic.c
+	../c/intern/curve_fit_cubic_refit.c
 
-	../c/intern/curve_fit_inline.h
 	../c/curve_fit_nd.h
+	../c/intern/curve_fit_inline.h
+
+	# generic helpers
+	../c/intern/generic_heap.c
+
+	../c/intern/generic_alloc_impl.h
+	../c/intern/generic_heap.h
 )
 
 include_directories(

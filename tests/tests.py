@@ -85,7 +85,7 @@ def export_svg(name, s, points, measure_points):
     dirname = os.path.join(TEST_DATA_PATH, "..", "data_svg")
     os.makedirs(dirname, exist_ok=True)
     fp = os.path.join(dirname, name + ".svg")
-    scale = 512.0
+    scale = 1024.0
     margin = 1.1
     with open(fp, 'w', encoding="utf-8") as f:
         fw = f.write
@@ -131,6 +131,7 @@ def export_svg(name, s, points, measure_points):
             fw('</g>\n')
 
         if s:
+            # tangent handles
             fw('<g fill="white" fill-opacity="0.5" stroke="white" stroke-opacity="0.5" stroke-width="1">\n')
             for i, p in s:
                 for v in p:
@@ -138,9 +139,16 @@ def export_svg(name, s, points, measure_points):
                     (v[0] * scale, -v[1] * scale))
             fw('</g>\n')
 
+            fw('<g fill="white" fill-opacity="0.5" stroke="white" stroke-opacity="0.5" stroke-width="1">\n')
+            for i, p in s:
+                v = p[1]
+                fw('<circle cx="%.4f" cy="%.4f" r="2"/>\n' %
+                (v[0] * scale, -v[1] * scale))
+            fw('</g>\n')
+
 
             # lines
-            fw('<g stroke="white" stroke-opacity="0.5" stroke-width="1">\n')
+            fw('<g stroke="white" stroke-opacity="0.2" stroke-width="1">\n')
             for i, (v0, v1, v2) in s:
                 fw('<line x1="%.4f" y1="%.4f" x2="%.4f" y2="%.4f" />\n' %
                 (v0[0] * scale, -v0[1] * scale, v1[0] * scale, -v1[1] * scale))
@@ -158,8 +166,10 @@ def export_svg(name, s, points, measure_points):
         fw('</svg>')
 
 
-def curve_fit(s, error):
-    c = curve_fit_nd.curve_from_points(s, error)
+def curve_fit(s, error, corner_angle, is_cyclic):
+    if corner_angle is None:
+        corner_angle = 10
+    c = curve_fit_nd.curve_from_points(s, error, corner_angle, is_cyclic)
     return c
 
 
@@ -178,7 +188,11 @@ def curve_error_max(points, curve, r_measure_points):
             lens[i] = lens_accum
             lens_accum += len_vnvn(points[s0], points[s1])
 
-        lens[:] = [l / lens[-1] for l in lens]
+        do_refine = USE_REFINE
+        if lens[-1] != 0.0:
+            lens[:] = [l / lens[-1] for l in lens]
+        else:
+            do_refine = False
 
         for i, s in enumerate(range(i0, i1)):
             u = lens[i]
@@ -186,7 +200,7 @@ def curve_error_max(points, curve, r_measure_points):
             p_curve = interp_cubic_vn(k0, h0, h1, k1, u)
 
             # step up and down the cubic to reach a close point
-            if USE_REFINE:
+            if do_refine:
                 error_best = len_squared_vnvn(p_real, p_curve)
 
                 u_step = 0.0
@@ -246,9 +260,10 @@ def test_data_load(name):
 
 class TestDataFile_Helper:
 
-    def assertTestData(self, name, error):
+    def assertTestData(self, name, error, corner_angle=None, is_cyclic=False):
         points = test_data_load(name)
-        curve = curve_fit(points, error)
+
+        curve = curve_fit(points, error, corner_angle, is_cyclic)
         # print(name + ix_id)
 
         measure_points = []
@@ -259,7 +274,7 @@ class TestDataFile_Helper:
             export_svg(name, curve, points, measure_points)
 
         # scale the error up to allow for some minor discrepancy in USE_REFINE
-        self.assertLess(error_test, error * 1.1)
+        self.assertLess(error_test, error * 1.01)
 
 
 class FreehandTest(unittest.TestCase, TestDataFile_Helper):
@@ -272,3 +287,9 @@ class FreehandTest(unittest.TestCase, TestDataFile_Helper):
 
     def test_curve_02(self):
         self.assertTestData("test_curve_freehand_02", 0.01)
+
+    def test_curve_03(self):
+        self.assertTestData("test_curve_freehand_03", 0.01, math.radians(30))
+
+    def test_curve_04(self):
+        self.assertTestData("test_curve_freehand_04_cyclic", 0.0075, math.radians(70), is_cyclic=True)
