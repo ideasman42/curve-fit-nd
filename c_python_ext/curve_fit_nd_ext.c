@@ -106,6 +106,8 @@ static PyObject *M_Curve_fit_nd_curve_from_points(PyObject *self, PyObject *args
 	double *cubic_array = NULL;
 	unsigned int cubic_array_len = 0;
 	unsigned int *cubic_orig_index = NULL;
+	unsigned int corner_indices_len = 0;
+	unsigned int *corner_indices = NULL;
 
 #if 0
 	if (curve_fit_cubic_to_points_db(
@@ -122,7 +124,7 @@ static PyObject *M_Curve_fit_nd_curve_from_points(PyObject *self, PyObject *args
 	        corner_angle,  /* only difference! */
 	        &cubic_array, &cubic_array_len,
 	        &cubic_orig_index,
-	        NULL, NULL) != 0)
+	        &corner_indices, &corner_indices_len) != 0)
 #endif
 	{
 
@@ -156,6 +158,9 @@ static PyObject *M_Curve_fit_nd_curve_from_points(PyObject *self, PyObject *args
 
 	free(cubic_array);
 	free(cubic_orig_index);
+	if (corner_indices) {
+		free(corner_indices);
+	}
 
 	return ret;
 }
