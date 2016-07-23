@@ -90,9 +90,12 @@ typedef struct Knot {
 	uint is_removed : 1;
 	uint is_corner  : 1;
 
-	/* store the error value, to see if we can improve on it
-	 * (without having to re-calculate each time) */
-	double error_sq[2];
+	/**
+	 * store the error value, to see if we can improve on it
+	 * (without having to re-calculate each time)
+	 *
+	 * This is the error between this knot and the next */
+	double error_sq_next;
 
 	/* initially point to contiguous memory, however we may re-assign */
 	double *tan[2];
@@ -341,7 +344,7 @@ static uint curve_incremental_simplify(
 			k->prev->handles[1] = r->handles[0];
 			k->next->handles[0] = r->handles[1];
 
-			k->prev->error_sq[1] = k->next->error_sq[0] = error_sq;
+			k->prev->error_sq_next = error_sq;
 
 			free(r);
 		}
@@ -452,7 +455,7 @@ static void knot_refit_error_recalculate(
 
 	struct Knot *k_refit = &knots[refit_index];
 
-	const double cost_sq_src_max = MAX2(k->error_sq[0], k->error_sq[1]);
+	const double cost_sq_src_max = MAX2(k->prev->error_sq_next, k->error_sq_next);
 
 	double cost_sq_dst[2];
 	double handles_prev[2], handles_next[2];
@@ -784,8 +787,8 @@ static uint curve_incremental_simplify_corners(
 		k_split->handles[1] = c->handles_next[0];
 		k_next->handles[0]  = c->handles_next[1];
 
-		k_split->error_sq[0] = k_prev->error_sq[1] = c->error_sq[0];
-		k_split->error_sq[1] = k_next->error_sq[0] = c->error_sq[1];
+		k_prev->error_sq_next  = c->error_sq[0];
+		k_split->error_sq_next = c->error_sq[1];
 
 		k_split->heap_node = NULL;
 
@@ -879,6 +882,8 @@ int curve_fit_cubic_to_points_incremental_db(
 		knots[knots_len - 1].can_remove = false;
 	}
 
+#if 0
+	/* 2x normalize calculations, but correct */
 	for (uint i = 0; i < knots_len; i++) {
 		Knot *k = &knots[i];
 		double a[dims];
@@ -904,6 +909,40 @@ int curve_fit_cubic_to_points_incremental_db(
 		normalize_vn(k->tan[0], dims);
 		copy_vnvn(k->tan[1], k->tan[0], dims);
 	}
+#else
+	{
+		double tan_prev[dims];
+		double tan_next[dims];
+
+		if (is_cyclic) {
+			/* TODO */
+		}
+		else {
+			normalize_vn_vnvn(tan_prev, &points[0 * dims], &points[1 * dims], dims);
+			copy_vnvn(knots[0].tan[0], tan_prev, dims);
+			copy_vnvn(knots[0].tan[1], tan_prev, dims);
+			for (uint i_curr = 1, i_next = 2; i_next < knots_len; i_curr = i_next++) {
+				Knot *k = &knots[i_curr];
+				normalize_vn_vnvn(tan_next, &points[i_curr * dims], &points[i_next * dims], dims);
+
+				add_vn_vnvn(k->tan[0], tan_prev, tan_next, dims);
+				normalize_vn(k->tan[0], dims);
+				copy_vnvn(k->tan[1], k->tan[0], dims);
+				copy_vnvn(tan_prev, tan_next, dims);
+			}
+			copy_vnvn(knots[knots_len - 1].tan[0], tan_next, dims);
+			copy_vnvn(knots[knots_len - 1].tan[1], tan_next, dims);
+		}
+	}
+#endif
+
+
+#if 0
+	for (uint i = 0; i < knots_len; i++) {
+		Knot *k = &knots[i];
+		printf("TAN %.8f %.8f %.8f %.8f\n", k->tan[0][0], k->tan[0][1], k->tan[1][0], k->tan[0][1]);
+	}
+#endif
 
 	uint knots_len_remaining = knots_len;
 
