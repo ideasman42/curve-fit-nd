@@ -270,6 +270,11 @@ HeapNode *HEAP_top(Heap *heap)
 	return heap->tree[0];
 }
 
+double HEAP_top_value(Heap *heap)
+{
+	return heap->tree[0]->value;
+}
+
 void *HEAP_popmin(Heap *heap)
 {
 	void *ptr = heap->tree[0]->ptr;

@@ -16,4 +16,5 @@ void        *HEAP_popmin(Heap *heap);
 void         HEAP_clear(Heap *heap, HeapFreeFP ptrfreefp);
 unsigned int HEAP_size(Heap *heap);
 HeapNode    *HEAP_top(Heap *heap);
+double       HEAP_top_value(Heap *heap);
 double       HEAP_node_value(HeapNode *node);

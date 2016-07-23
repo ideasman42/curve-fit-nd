@@ -67,6 +67,10 @@ typedef struct Knot {
 	uint is_removed : 1;
 	uint is_corner  : 1;
 
+	/* store the error value, to see if we can improve on it
+	 * (without having to re-calculate each time) */
+	double error_sq[2];
+
 	/* initially point to contiguous memory, however we may re-assign */
 	double *tan[2];
 } Knot;
@@ -307,11 +311,15 @@ static uint curve_incremental_simplify(
 		struct Knot *k;
 
 		{
+			const double error_sq = HEAP_top_value(heap);
 			struct KnotRemoveState *r = HEAP_popmin(heap);
 			k = &knots[r->knot_index];
 			k->heap_node = NULL;
 			k->prev->handles[1] = r->handles[0];
 			k->next->handles[0] = r->handles[1];
+
+			k->prev->error_sq[1] = k->next->error_sq[0] = error_sq;
+
 			free(r);
 		}
 
@@ -350,6 +358,7 @@ struct KnotRefitState {
 	uint knot_index_refit;  /* when SPLIT_POINT_INVALID - remove this item */
 	/* handles for prev/next knots */
 	double handles_prev[2], handles_next[2];
+	double error_sq[2];
 };
 
 static void knot_refit_error_recalculate(
@@ -392,6 +401,8 @@ static void knot_refit_error_recalculate(
 			r->handles_next[0] = 0.0;
 			r->handles_next[1] = handles[1];
 
+			r->error_sq[0] = r->error_sq[1] = cost_sq;
+
 			/* always remove first! (make a negative number) */
 			const double cost_sq_inv = (cost_sq != 0.0) ? -1.0 / cost_sq : -DBL_MAX;
 
@@ -418,24 +429,7 @@ static void knot_refit_error_recalculate(
 
 	struct Knot *k_refit = &knots[refit_index];
 
-	double cost_sq_src[2];
-	double handle_dummy[2];
-
-	/* XXX, store for re-use!!! */
-	cost_sq_src[0] = knot_calc_curve_error_value(
-	        points, points_len,
-	        k->prev, k,
-	        k->prev->tan[1], k->tan[0],
-	        dims,
-	        handle_dummy);
-	cost_sq_src[1] = knot_calc_curve_error_value(
-	        points, points_len,
-	        k, k->next,
-	        k->tan[1], k->next->tan[0],
-	        dims,
-	        handle_dummy);
-
-	const double cost_sq_src_max = MAX2(cost_sq_src[0], cost_sq_src[1]);
+	const double cost_sq_src_max = MAX2(k->error_sq[0], k->error_sq[1]);
 
 	double cost_sq_dst[2];
 	double handles_prev[2], handles_next[2];
@@ -471,6 +465,9 @@ static void knot_refit_error_recalculate(
 
 			r->handles_next[0] = handles_next[0];
 			r->handles_next[1] = handles_next[1];
+
+			r->error_sq[0] = cost_sq_dst[0];
+			r->error_sq[1] = cost_sq_dst[1];
 
 			const double cost_sq_dst_max = MAX2(cost_sq_dst[0], cost_sq_dst[1]);
 
@@ -599,6 +596,7 @@ struct KnotCornerState {
 
 	/* handles for prev/next knots */
 	double handles_prev[2], handles_next[2];
+	double error_sq[2];
 };
 
 /**
@@ -614,17 +612,16 @@ static void knot_corner_error_recalculate(
 	assert(k_prev->can_remove && k_next->can_remove);
 
 	double handles_prev[2], handles_next[2];
-
 	/* test skipping 'k_prev' by using points (k_prev->prev to k_split) */
-	double cost_prev_sq, cost_next_sq;
+	double cost_sq_dst[2];
 
-	if (((cost_prev_sq = knot_calc_curve_error_value(
+	if (((cost_sq_dst[0] = knot_calc_curve_error_value(
 	          points, points_len,
 	          k_prev, k_split,
 	          k_prev->tan[1], k_prev->tan[1],
 	          dims,
 	          handles_prev)) < error_sq_max) &&
-	    ((cost_next_sq = knot_calc_curve_error_value(
+	    ((cost_sq_dst[1] = knot_calc_curve_error_value(
 	          points, points_len,
 	          k_split, k_next,
 	          k_next->tan[0], k_next->tan[0],
@@ -650,7 +647,11 @@ static void knot_corner_error_recalculate(
 
 		c->handles_next[0] = handles_next[0];
 		c->handles_next[1] = handles_next[1];
-		const double cost_max_sq = MAX2(cost_prev_sq, cost_next_sq);
+
+		c->error_sq[0] = cost_sq_dst[0];
+		c->error_sq[1] = cost_sq_dst[1];
+
+		const double cost_max_sq = MAX2(cost_sq_dst[0], cost_sq_dst[1]);
 		k_split->heap_node = HEAP_insert(heap, cost_max_sq, c);
 	}
 	else {
@@ -761,6 +762,9 @@ static uint curve_incremental_simplify_corners(
 		k_split->handles[0] = c->handles_prev[1];
 		k_split->handles[1] = c->handles_next[0];
 		k_next->handles[0]  = c->handles_next[1];
+
+		k_split->error_sq[0] = k_prev->error_sq[1] = c->error_sq[0];
+		k_split->error_sq[1] = k_next->error_sq[0] = c->error_sq[1];
 
 		k_split->heap_node = NULL;
 
