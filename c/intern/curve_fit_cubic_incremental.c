@@ -36,6 +36,7 @@
 #endif
 
 #define USE_KNOT_REFIT
+#define USE_KNOT_REFIT_REMOVE
 #define USE_CORNER_DETECT
 
 #define SPLIT_POINT_INVALID ((uint)-1)
@@ -342,7 +343,8 @@ static uint curve_incremental_simplify(
 #ifdef USE_KNOT_REFIT
 
 struct KnotRefitState {
-	uint knot_index, knot_index_refit;
+	uint knot_index;
+	uint knot_index_refit;  /* when SPLIT_POINT_INVALID - remove this item */
 	/* handles for prev/next knots */
 	double handles_prev[2], handles_next[2];
 };
@@ -351,13 +353,51 @@ static void knot_refit_error_recalculate(
         Heap *heap, const double *points, const uint points_len,
         struct Knot *knots, const uint knots_len,
         struct Knot *k,
+        const double error_sq_max,
         const uint dims)
 {
 	assert(k->can_remove);
 
-	if (k->is_corner) {
-		goto remove;
+#ifdef USE_KNOT_REFIT_REMOVE
+	{
+		double handles[2];
+
+		/* first check if we can remove, this allows to refit and remove as we go */
+		const double cost_sq = knot_calc_curve_error_value(
+		        points, points_len,
+		        k->prev, k->next,
+		        k->prev->tan[1], k->next->tan[0],
+		        dims,
+		        handles);
+
+		if (cost_sq < error_sq_max) {
+			struct KnotRefitState *r;
+			if (k->heap_node) {
+				r = HEAP_node_ptr(k->heap_node);
+				HEAP_remove(heap, k->heap_node);
+			}
+			else {
+				r = malloc(sizeof(*r));
+				r->knot_index = k->knot_index;
+			}
+
+			r->knot_index_refit = SPLIT_POINT_INVALID;
+
+			r->handles_prev[0] = handles[0];
+			r->handles_prev[1] = 0.0;
+
+			r->handles_next[0] = 0.0;
+			r->handles_next[1] = handles[1];
+
+			/* always remove first! (make a negative number) */
+			const double cost_sq_inv = (cost_sq != 0.0) ? -1.0 / cost_sq : -DBL_MAX;
+
+			k->heap_node = HEAP_insert(heap, cost_sq_inv, r);
+
+			return;
+		}
 	}
+#endif  /* USE_KNOT_REFIT_REMOVE */
 
 	const uint refit_index = knot_find_split_point(
 	         points, points_len,
@@ -365,11 +405,13 @@ static void knot_refit_error_recalculate(
 	         knots_len,
 	         dims);
 
-	if (refit_index == SPLIT_POINT_INVALID) {
+	if ((refit_index == SPLIT_POINT_INVALID) ||
+	    (refit_index == k->point_index))
+	{
 		goto remove;
 	}
 
-	struct Knot *k_refit = &knots[refit_index];  /* index may be invalid */
+	struct Knot *k_refit = &knots[refit_index];
 
 	double cost_sq_src[2];
 	double handle_dummy[2];
@@ -393,9 +435,7 @@ static void knot_refit_error_recalculate(
 	double cost_sq_dst[2];
 	double handles_prev[2], handles_next[2];
 
-	if ((refit_index != SPLIT_POINT_INVALID) &&
-	    (refit_index != k->point_index) &&
-	    (((cost_sq_dst[0] = knot_calc_curve_error_value(
+	if ((((cost_sq_dst[0] = knot_calc_curve_error_value(
 	           points, points_len,
 	           k->prev, k_refit,
 	           k->prev->tan[1], k_refit->tan[0],
@@ -456,6 +496,7 @@ remove:
 static uint curve_incremental_simplify_refit(
         const double *points, const uint points_len,
         struct Knot *knots, const uint knots_len, uint knots_len_remaining,
+        const double error_sq_max,
         const uint dims)
 {
 	Heap *heap = HEAP_new(knots_len);
@@ -466,7 +507,7 @@ static uint curve_incremental_simplify_refit(
 		    (k->is_corner == false) &&
 		    (k->prev && k->next))
 		{
-			knot_refit_error_recalculate(heap, points, points_len, knots, knots_len, k, dims);
+			knot_refit_error_recalculate(heap, points, points_len, knots, knots_len, k, error_sq_max, dims);
 		}
 	}
 
@@ -477,12 +518,17 @@ static uint curve_incremental_simplify_refit(
 			struct KnotRefitState *r = HEAP_popmin(heap);
 			k_old = &knots[r->knot_index];
 			k_old->heap_node = NULL;
-			k_refit = &knots[r->knot_index_refit];
+
+			if (r->knot_index_refit == SPLIT_POINT_INVALID) {
+				k_refit = NULL;
+			}
+			else {
+				k_refit = &knots[r->knot_index_refit];
+				k_refit->handles[0] = r->handles_prev[1];
+				k_refit->handles[1] = r->handles_next[0];
+			}
 
 			k_old->prev->handles[1] = r->handles_prev[0];
-			k_refit->handles[0] = r->handles_prev[1];
-
-			k_refit->handles[1] = r->handles_next[0];
 			k_old->next->handles[0] = r->handles_next[1];
 
 			free(r);
@@ -491,24 +537,32 @@ static uint curve_incremental_simplify_refit(
 		struct Knot *k_prev = k_old->prev;
 		struct Knot *k_next = k_old->next;
 
-		/* remove ourselves */
-		k_next->prev = k_refit;
-		k_prev->next = k_refit;
-
-		k_refit->prev = k_prev;
-		k_refit->next = k_next;
-		k_refit->is_removed = false;
-
 		k_old->next = NULL;
 		k_old->prev = NULL;
 		k_old->is_removed = true;
 
-		if (k_prev->can_remove && (k_prev->prev && k_prev->next)) {
-			knot_refit_error_recalculate(heap, points, points_len, knots, knots_len, k_prev, dims);
+		if (k_refit) {
+			/* remove ourselves */
+			k_next->prev = k_refit;
+			k_prev->next = k_refit;
+
+			k_refit->prev = k_prev;
+			k_refit->next = k_next;
+			k_refit->is_removed = false;
+		}
+		else {
+			k_next->prev = k_prev;
+			k_prev->next = k_next;
+
+			knots_len_remaining -= 1;
 		}
 
-		if (k_next->can_remove && (k_next->prev && k_next->next)) {
-			knot_refit_error_recalculate(heap, points, points_len, knots, knots_len, k_next, dims);
+		if (k_prev->can_remove && (k_prev->is_corner == false) && (k_prev->prev && k_prev->next)) {
+			knot_refit_error_recalculate(heap, points, points_len, knots, knots_len, k_prev, error_sq_max, dims);
+		}
+
+		if (k_next->can_remove && (k_next->is_corner == false) && (k_next->prev && k_next->next)) {
+			knot_refit_error_recalculate(heap, points, points_len, knots, knots_len, k_next, error_sq_max, dims);
 		}
 
 		// knots_len_remaining -= 1;
@@ -709,6 +763,7 @@ printf("Found Corner! %d\n", k_split->knot_index);
 		// k_split->can_remove = false;  /* not essential, but we dont want to remove for now */
 
 		knots_len_remaining++;
+
 		corner_index_len++;
 	}
 
@@ -819,10 +874,18 @@ int curve_fit_cubic_to_points_incremental_db(
 
 	uint knots_len_remaining = knots_len;
 
+if (1) {
 	knots_len_remaining = curve_incremental_simplify(
 	        points, points_len,
 	        knots, knots_len, knots_len_remaining,
 	        SQUARE(error_threshold), dims);
+} else {
+	knots_len_remaining = curve_incremental_simplify_refit(
+	        points, points_len,
+	        knots, knots_len, knots_len_remaining,
+	        SQUARE(error_threshold),
+	        dims);
+}
 
 #ifdef USE_CORNER_DETECT
 	if (use_corner) {
@@ -842,7 +905,7 @@ int curve_fit_cubic_to_points_incremental_db(
 		knots_len_remaining = curve_incremental_simplify_refit(
 		        points, points_len,
 		        knots, knots_len, knots_len_remaining,
-		        /* XXX, 'use_corner' works but is weak*/
+		        SQUARE(error_threshold),
 		        dims);
 #endif  /* USE_KNOT_REFIT */
 
@@ -877,12 +940,22 @@ int curve_fit_cubic_to_points_incremental_db(
 		assert(c_index == *r_corner_index_len);
 		*r_corner_index_array = corner_index_array;
 	}
-#else
+	else {
 #ifdef USE_KNOT_REFIT
 		knots_len_remaining = curve_incremental_simplify_refit(
 		        points, points_len,
 		        knots, knots_len, knots_len_remaining,
+		        SQUARE(error_threshold),
 		        dims);
+#endif  /* USE_KNOT_REFIT */
+	}
+#else
+#ifdef USE_KNOT_REFIT
+	knots_len_remaining = curve_incremental_simplify_refit(
+	        points, points_len,
+	        knots, knots_len, knots_len_remaining,
+	        SQUARE(error_threshold),
+	        dims);
 #endif  /* USE_KNOT_REFIT */
 #endif  /* USE_CORNER_DETECT */
 
