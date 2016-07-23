@@ -1,6 +1,29 @@
 
 /* TODO, collapse at end-points for non-cyclic curves! - Dont just collapse curves */
 
+/**
+ * - first iteratively remove all points under threshold.
+ * - If corner calculation is enabled:
+ *
+ *   - find adjacent knots that exceed the angle limit
+ *   - find a 'split' point between the knots (could include the knots)
+ *   - if copying the tangents to this split point doesn't exceed the error threshold.
+ *
+ *     - assign the tangents of the two knots to the split point, define it as a corner.
+ *   - after this, we have many points which are too close.
+ *   - run a second removal pass, this time only deal with points adjacent to the corners.
+ *     some points will not be able to be removed and remain 'too close',
+ *     tag these as 'use_force_refit', to be handled in the re-fit pass.
+ *
+ * - run a re-fit pass, where knots are re-positioned between their adjacent knots
+ *   when their re-fit position has a lower 'error' or force re-fit is set.
+ *
+ *   Note that its possible the force-refit error is above the threshold,
+ *   in this case we could try different fits (though this is rather a kludge).
+ *   Another option could be to revert its corner status, also not ideal
+ *   but at least it keeps the curve in a valid state.
+ */
+
 #include <math.h>
 #include <float.h>
 #include <stdbool.h>
@@ -572,8 +595,6 @@ static uint curve_incremental_simplify_refit(
 		if (k_next->can_remove && (k_next->is_corner == false) && (k_next->prev && k_next->next)) {
 			knot_refit_error_recalculate(heap, points, points_len, knots, knots_len, k_next, error_sq_max, dims);
 		}
-
-		// knots_len_remaining -= 1;
 	}
 
 	HEAP_free(heap, free);
