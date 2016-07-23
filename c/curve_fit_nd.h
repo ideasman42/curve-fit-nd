@@ -121,6 +121,7 @@ int curve_fit_cubic_to_points_single_fl(
 
 enum {
 	CURVE_FIT_CALC_HIGH_QUALIY          = (1 << 0),
+	CURVE_FIT_CALC_CYCLIC               = (1 << 1),
 };
 
 

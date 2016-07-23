@@ -132,14 +132,12 @@ def export_svg(name, s, points, measure_points):
 
         if s:
             # tangent handles
-            '''
             fw('<g fill="white" fill-opacity="0.5" stroke="white" stroke-opacity="0.5" stroke-width="1">\n')
             for i, p in s:
                 for v in p:
                     fw('<circle cx="%.4f" cy="%.4f" r="2"/>\n' %
                     (v[0] * scale, -v[1] * scale))
             fw('</g>\n')
-            '''
 
             fw('<g fill="white" fill-opacity="0.5" stroke="white" stroke-opacity="0.5" stroke-width="1">\n')
             for i, p in s:
@@ -168,10 +166,10 @@ def export_svg(name, s, points, measure_points):
         fw('</svg>')
 
 
-def curve_fit(s, error, corner_angle):
+def curve_fit(s, error, corner_angle, is_cyclic):
     if corner_angle is None:
         corner_angle = 10
-    c = curve_fit_nd.curve_from_points(s, error, corner_angle)
+    c = curve_fit_nd.curve_from_points(s, error, corner_angle, is_cyclic)
     return c
 
 
@@ -262,9 +260,9 @@ def test_data_load(name):
 
 class TestDataFile_Helper:
 
-    def assertTestData(self, name, error, corner_angle=None):
+    def assertTestData(self, name, error, corner_angle=None, is_cyclic=False):
         points = test_data_load(name)
-        curve = curve_fit(points, error, corner_angle)
+        curve = curve_fit(points, error, corner_angle, is_cyclic)
         # print(name + ix_id)
 
         measure_points = []
@@ -291,3 +289,6 @@ class FreehandTest(unittest.TestCase, TestDataFile_Helper):
 
     def test_curve_03(self):
         self.assertTestData("test_curve_freehand_03", 0.01, math.radians(30))
+
+    def test_curve_04(self):
+        self.assertTestData("test_curve_freehand_04_cyclic", 0.0075, math.radians(70), is_cyclic=True)

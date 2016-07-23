@@ -1,5 +1,8 @@
 
+#include <stdbool.h>
+
 #include <Python.h>
+
 
 #include "curve_fit_nd.h"
 
@@ -10,8 +13,26 @@ PyDoc_STRVAR(M_Curve_fit_nd_doc,
 );
 
 
+/**
+ * Use with PyArg_ParseTuple's "O&" formatting.
+ */
+int PyC_ParseBool(PyObject *o, void *p)
+{
+	bool *bool_p = p;
+	long value;
+	if (((value = PyLong_AsLong(o)) == -1) || !(value == 0 || value == 1)) {
+		PyErr_Format(PyExc_ValueError,
+		             "expected a bool or int (0/1), got %s",
+		             Py_TYPE(o)->tp_name);
+		return 0;
+	}
+
+	*bool_p = value ? true : false;
+	return 1;
+}
+
 PyDoc_STRVAR(M_Curve_fit_nd_curve_from_points_doc,
-".. function:: curve_from_points(points, error)\n"
+".. function:: curve_from_points(points, error, corner_angle=math.pi, is_cyclic=False)\n"
 "\n"
 "   Returns the newly calculated curve.\n"
 "\n"
@@ -31,15 +52,23 @@ static PyObject *M_Curve_fit_nd_curve_from_points(PyObject *self, PyObject *args
 	PyObject *points_fast;
 	double error_threshold;
 	double corner_angle = M_PI;
-
+	bool is_cyclic = false;
 
 	if (!PyArg_ParseTuple(
-	        args, "Od|d:curve_from_points",
+	        args, "Od|dO&:curve_from_points",
 	        &points,
-	        &error_threshold, &corner_angle) ||
+	        &error_threshold,
+	        &corner_angle,
+	        PyC_ParseBool, &is_cyclic) ||
 	    !(points_fast = PySequence_Fast(points, error_prefix)))
 	{
 		return NULL;
+	}
+
+	unsigned int calc_flag = 0;
+
+	if (is_cyclic) {
+		calc_flag |= CURVE_FIT_CALC_CYCLIC;
 	}
 
 	const unsigned int points_len = PySequence_Fast_GET_SIZE(points_fast);
@@ -119,7 +148,7 @@ static PyObject *M_Curve_fit_nd_curve_from_points(PyObject *self, PyObject *args
 	        NULL, NULL) != 0)
 #else
 	if (curve_fit_cubic_to_points_incremental_db(
-	        points_data, points_len, dims, error_threshold, 0,
+	        points_data, points_len, dims, error_threshold, calc_flag,
 	        NULL, 0,
 	        corner_angle,  /* only difference! */
 	        &cubic_array, &cubic_array_len,

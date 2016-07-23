@@ -837,17 +837,24 @@ int curve_fit_cubic_to_points_incremental_db(
 	(void)r_corner_index_len;
 #endif
 
-(void)calc_flag;
 (void)corners;
 (void)corners_len;
 
-	const bool is_cyclic = false;
-
+	const bool is_cyclic = (calc_flag & CURVE_FIT_CALC_CYCLIC) != 0;
 #ifdef USE_CORNER_DETECT
 	const bool use_corner = (corner_angle < M_PI);
 #else
 	(void)corner_angle;
 #endif
+
+	double *points_alloc = NULL;
+	if (is_cyclic) {
+		/* double alloc the list so we can more easily */
+		double *points_alloc = malloc((sizeof(double) * points_len * dims) * 2);
+		memcpy(points_alloc,                       points,       sizeof(double) * points_len * dims);
+		memcpy(points_alloc + (points_len * dims), points_alloc, sizeof(double) * points_len * dims);
+		points = points_alloc;
+	}
 
 	double *tangents = malloc(sizeof(double) * knots_len * 2 * dims);
 
@@ -915,7 +922,16 @@ int curve_fit_cubic_to_points_incremental_db(
 		double tan_next[dims];
 
 		if (is_cyclic) {
-			/* TODO */
+			normalize_vn_vnvn(tan_prev, &points[(knots_len - 2) * dims], &points[(knots_len - 1) * dims], dims);
+			for (uint i_curr = knots_len - 1, i_next = 0; i_next < knots_len; i_curr = i_next++) {
+				Knot *k = &knots[i_curr];
+				normalize_vn_vnvn(tan_next, &points[i_curr * dims], &points[i_next * dims], dims);
+
+				add_vn_vnvn(k->tan[0], tan_prev, tan_next, dims);
+				normalize_vn(k->tan[0], dims);
+				copy_vnvn(k->tan[1], k->tan[0], dims);
+				copy_vnvn(tan_prev, tan_next, dims);
+			}
 		}
 		else {
 			normalize_vn_vnvn(tan_prev, &points[0 * dims], &points[1 * dims], dims);
@@ -1018,6 +1034,11 @@ if (1) {
 		*r_corner_index_array = corner_index_array;
 	}
 #endif  /* USE_CORNER_DETECT */
+
+	if (points_alloc) {
+		free(points_alloc);
+		points_alloc = NULL;
+	}
 
 
 	uint *cubic_orig_index = NULL;
