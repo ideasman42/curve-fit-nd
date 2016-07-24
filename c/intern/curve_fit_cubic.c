@@ -878,7 +878,6 @@ static double points_calc_coord_length(
 
 #ifdef USE_LENGTH_CACHE
 		length = points_length_cache[i];
-printf("AAA %d\n", i);
 		assert(len_vnvn(pt, pt_prev, dims) == points_length_cache[i]);
 #else
 		length = len_vnvn(pt, pt_prev, dims);
