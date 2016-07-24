@@ -68,7 +68,7 @@ set(PYTHON_INCLUDE_DIRS "${PYTHON_INCLUDE_DIR}")
 
 set(SRC
 	../c/intern/curve_fit_cubic.c
-	../c/intern/curve_fit_cubic_incremental.c
+	../c/intern/curve_fit_cubic_refit.c
 
 	../c/intern/curve_fit_inline.h
 
