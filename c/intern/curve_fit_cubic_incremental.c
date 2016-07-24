@@ -74,7 +74,7 @@ struct PointData {
 #endif
 };
 
-typedef struct Knot {
+struct Knot {
 	struct Knot *next, *prev;
 
 	HeapNode *heap_node;
@@ -847,7 +847,7 @@ int curve_fit_cubic_to_points_incremental_db(
 {
 //	const double error_threshold_sq = error_threshold * error_threshold;
 	const uint knots_len = points_len;
-	Knot *knots = malloc(sizeof(Knot) * knots_len);
+	struct Knot *knots = malloc(sizeof(Knot) * knots_len);
 	knots[0].next = NULL;
 
 #ifndef USE_CORNER_DETECT
@@ -954,7 +954,7 @@ int curve_fit_cubic_to_points_incremental_db(
 		if (is_cyclic) {
 			normalize_vn_vnvn(tan_prev, &points[(knots_len - 2) * dims], &points[(knots_len - 1) * dims], dims);
 			for (uint i_curr = knots_len - 1, i_next = 0; i_next < knots_len; i_curr = i_next++) {
-				Knot *k = &knots[i_curr];
+				struct Knot *k = &knots[i_curr];
 #ifdef USE_LENGTH_CACHE
 				points_length_cache[i_next] =
 #endif
@@ -975,7 +975,7 @@ int curve_fit_cubic_to_points_incremental_db(
 			copy_vnvn(knots[0].tan[0], tan_prev, dims);
 			copy_vnvn(knots[0].tan[1], tan_prev, dims);
 			for (uint i_curr = 1, i_next = 2; i_next < knots_len; i_curr = i_next++) {
-				Knot *k = &knots[i_curr];
+				struct Knot *k = &knots[i_curr];
 
 #ifdef USE_LENGTH_CACHE
 				points_length_cache[i_next] =
@@ -1099,9 +1099,9 @@ int curve_fit_cubic_to_points_incremental_db(
 		cubic_orig_index = malloc(sizeof(uint) * knots_len_remaining);
 	}
 
-	Knot *knots_first = NULL;
+	struct Knot *knots_first = NULL;
 	{
-		Knot *k;
+		struct Knot *k;
 		for (uint i = 0; i < knots_len; i++) {
 			if (knots[i].is_removed == false) {
 				knots_first = &knots[i];
@@ -1122,7 +1122,7 @@ int curve_fit_cubic_to_points_incremental_db(
 
 	{
 		double *c_step = cubic_array;
-		Knot *k = knots_first;
+		struct Knot *k = knots_first;
 		for (uint i = 0; i < knots_len_remaining; i++, k = k->next) {
 			const double *p = &points[k->point_index * dims];
 
