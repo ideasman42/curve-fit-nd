@@ -293,8 +293,7 @@ static void knot_remove_error_recalculate(
 	double handles[2];
 
 	const double cost_sq = knot_calc_curve_error_value(
-	        pd,
-	        k->prev, k->next,
+	        pd, k->prev, k->next,
 	        k->prev->tan[1], k->next->tan[0],
 	        dims,
 	        handles);
@@ -415,8 +414,7 @@ static void knot_refit_error_recalculate(
 
 		/* first check if we can remove, this allows to refit and remove as we go */
 		const double cost_sq = knot_calc_curve_error_value(
-		        pd,
-		        k->prev, k->next,
+		        pd, k->prev, k->next,
 		        k->prev->tan[1], k->next->tan[0],
 		        dims,
 		        handles);
@@ -452,8 +450,7 @@ static void knot_refit_error_recalculate(
 #endif  /* USE_KNOT_REFIT_REMOVE */
 
 	const uint refit_index = knot_find_split_point(
-	         pd,
-	         k->prev, k->next,
+	         pd, k->prev, k->next,
 	         knots_len,
 	         dims);
 
@@ -472,14 +469,12 @@ static void knot_refit_error_recalculate(
 	double handles_prev[2], handles_next[2];
 
 	if ((((cost_sq_dst[0] = knot_calc_curve_error_value(
-	           pd,
-	           k->prev, k_refit,
+	           pd, k->prev, k_refit,
 	           k->prev->tan[1], k_refit->tan[0],
 	           dims,
 	           handles_prev)) < cost_sq_src_max) &&
 	     ((cost_sq_dst[1] = knot_calc_curve_error_value(
-	           pd,
-	           k_refit, k->next,
+	           pd, k_refit, k->next,
 	           k_refit->tan[1], k->next->tan[0],
 	           dims,
 	           handles_next)) < cost_sq_src_max)))
@@ -652,14 +647,12 @@ static void knot_corner_error_recalculate(
 	double cost_sq_dst[2];
 
 	if (((cost_sq_dst[0] = knot_calc_curve_error_value(
-	          pd,
-	          k_prev, k_split,
+	          pd, k_prev, k_split,
 	          k_prev->tan[1], k_prev->tan[1],
 	          dims,
 	          handles_prev)) < error_sq_max) &&
 	    ((cost_sq_dst[1] = knot_calc_curve_error_value(
-	          pd,
-	          k_split, k_next,
+	          pd, k_split, k_next,
 	          k_next->tan[0], k_next->tan[0],
 	          dims,
 	          handles_next)) < error_sq_max))
@@ -746,8 +739,7 @@ static uint curve_incremental_simplify_corners(
 
 				/* compare 3x so as to allow both to be changed by maximum of error_sq_max */
 				const uint split_knot_index = knot_find_split_point_on_axis(
-				        pd,
-				        k_prev, k_next,
+				        pd, k_prev, k_next,
 				        knots_len,
 				        plane_no,
 				        dims);
@@ -767,9 +759,7 @@ static uint curve_incremental_simplify_corners(
 							struct Knot *k_split = &knots[split_knot_index];
 
 							knot_corner_error_recalculate(
-							        heap, pd,
-							        k_split,
-							        k_prev, k_next,
+							        heap, pd, k_split, k_prev, k_next,
 							        error_sq_max,
 							        dims);
 						}
@@ -1020,8 +1010,7 @@ int curve_fit_cubic_to_points_incremental_db(
 	/* 'curve_incremental_simplify_refit' can be called here, but its very slow
 	 * just remove all within the threshold first. */
 	knots_len_remaining = curve_incremental_simplify(
-	        &pd,
-	        knots, knots_len, knots_len_remaining,
+	        &pd, knots, knots_len, knots_len_remaining,
 	        SQUARE(error_threshold), dims);
 
 #ifdef USE_CORNER_DETECT
@@ -1031,8 +1020,7 @@ int curve_fit_cubic_to_points_incremental_db(
 		}
 
 		knots_len_remaining = curve_incremental_simplify_corners(
-		        &pd,
-		        knots, knots_len, knots_len_remaining,
+		        &pd, knots, knots_len, knots_len_remaining,
 		        SQUARE(error_threshold), SQUARE(error_threshold * 3),
 		        corner_angle,
 		        dims,
@@ -1042,8 +1030,7 @@ int curve_fit_cubic_to_points_incremental_db(
 
 #ifdef USE_KNOT_REFIT
 	knots_len_remaining = curve_incremental_simplify_refit(
-	        &pd,
-	        knots, knots_len, knots_len_remaining,
+	        &pd, knots, knots_len, knots_len_remaining,
 	        SQUARE(error_threshold),
 	        dims);
 #endif  /* USE_KNOT_REFIT */
