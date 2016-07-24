@@ -69,10 +69,14 @@ set(PYTHON_INCLUDE_DIRS "${PYTHON_INCLUDE_DIR}")
 set(SRC
 	../c/intern/curve_fit_cubic.c
 	../c/intern/curve_fit_cubic_incremental.c
-	../c/intern/heap_impl.c
 
 	../c/intern/curve_fit_inline.h
-	../c/intern/heap_impl.h
+
+	# generic helpers
+	../c/intern/generic_alloc_impl.h
+	../c/intern/generic_heap_impl.c
+
+	../c/intern/generic_heap_impl.h
 	../c/curve_fit_nd.h
 )
 

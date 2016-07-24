@@ -24,7 +24,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/** \file heap_impl.c
+/** \file generic_heap_impl.c
  *  \ingroup curve_fit
  */
 
@@ -33,7 +33,7 @@
 #include <stdbool.h>
 #include <assert.h>
 
-#include "heap_impl.h"
+#include "generic_heap_impl.h"
 
 /* swap with a temp value */
 #define SWAP_TVAL(tval, a, b)  {  \
@@ -56,33 +56,23 @@ struct HeapNode {
 	unsigned int index;
 };
 
-struct HeapNode_Chunk {
-	struct HeapNode_Chunk *prev;
-	unsigned int    size;
-	unsigned int    bufsize;
-	struct HeapNode buf[0];
-};
+#define TPOOL_IMPL_PREFIX  heap
+#define TPOOL_ALLOC_TYPE   HeapNode
+#define TPOOL_STRUCT       HeapMemPool
 
-/**
- * Number of nodes to include per #HeapNode_Chunk when no reserved size is passed,
- * or we allocate past the reserved number.
- *
- * \note Optimize number for 64kb allocs.
- */
-#define HEAP_CHUNK_DEFAULT_NUM \
-	(((1 << 16) - sizeof(struct HeapNode_Chunk)) / sizeof(HeapNode))
+#include "generic_alloc_impl.h"
+
+#undef TPOOL_IMPL_PREFIX
+#undef TPOOL_ALLOC_TYPE
+#undef TPOOL_STRUCT
+
 
 struct Heap {
 	unsigned int size;
 	unsigned int bufsize;
 	HeapNode **tree;
 
-	struct {
-		/* Always keep at least one chunk (never NULL) */
-		struct HeapNode_Chunk *chunk;
-		/* when NULL, allocate a new chunk */
-		HeapNode *free;
-	} nodes;
+	struct HeapMemPool pool;
 };
 
 /** \name Internal Functions
@@ -155,48 +145,6 @@ static void heap_up(Heap *heap, unsigned int i)
 /** \} */
 
 
-/** \name Internal Memory Management
- * \{ */
-
-static struct HeapNode_Chunk *heap_node_alloc_chunk(
-        unsigned int tot_nodes, struct HeapNode_Chunk *chunk_prev)
-{
-	struct HeapNode_Chunk *chunk = malloc(
-	        sizeof(struct HeapNode_Chunk) + (sizeof(HeapNode) * tot_nodes));
-	chunk->prev = chunk_prev;
-	chunk->bufsize = tot_nodes;
-	chunk->size = 0;
-	return chunk;
-}
-
-static struct HeapNode *heap_node_alloc(Heap *heap)
-{
-	HeapNode *node;
-
-	if (heap->nodes.free) {
-		node = heap->nodes.free;
-		heap->nodes.free = heap->nodes.free->ptr;
-	}
-	else {
-		struct HeapNode_Chunk *chunk = heap->nodes.chunk;
-		if (UNLIKELY(chunk->size == chunk->bufsize)) {
-			chunk = heap->nodes.chunk = heap_node_alloc_chunk(HEAP_CHUNK_DEFAULT_NUM, chunk);
-		}
-		node = &chunk->buf[chunk->size++];
-	}
-
-	return node;
-}
-
-static void heap_node_free(Heap *heap, HeapNode *node)
-{
-	node->ptr = heap->nodes.free;
-	heap->nodes.free = node;
-}
-
-/** \} */
-
-
 /** \name Public Heap API
  * \{ */
 
@@ -209,8 +157,7 @@ Heap *HEAP_new(unsigned int tot_reserve)
 	heap->bufsize = tot_reserve ? tot_reserve : 1;
 	heap->tree = malloc(heap->bufsize * sizeof(HeapNode *));
 
-	heap->nodes.chunk = heap_node_alloc_chunk((tot_reserve > 1) ? tot_reserve : HEAP_CHUNK_DEFAULT_NUM, NULL);
-	heap->nodes.free = NULL;
+	heap_pool_create(&heap->pool, tot_reserve);
 
 	return heap;
 }
@@ -225,13 +172,7 @@ void HEAP_free(Heap *heap, HeapFreeFP ptrfreefp)
 		}
 	}
 
-	struct HeapNode_Chunk *chunk = heap->nodes.chunk;
-	do {
-		struct HeapNode_Chunk *chunk_prev;
-		chunk_prev = chunk->prev;
-		free(chunk);
-		chunk = chunk_prev;
-	} while (chunk);
+	heap_pool_destroy(&heap->pool);
 
 	free(heap->tree);
 	free(heap);
@@ -248,14 +189,7 @@ void HEAP_clear(Heap *heap, HeapFreeFP ptrfreefp)
 	}
 	heap->size = 0;
 
-	/* Remove all except the last chunk */
-	while (heap->nodes.chunk->prev) {
-		struct HeapNode_Chunk *chunk_prev = heap->nodes.chunk->prev;
-		free(heap->nodes.chunk);
-		heap->nodes.chunk = chunk_prev;
-	}
-	heap->nodes.chunk->size = 0;
-	heap->nodes.free = NULL;
+	heap_pool_clear(&heap->pool);
 }
 
 HeapNode *HEAP_insert(Heap *heap, double value, void *ptr)
@@ -267,7 +201,7 @@ HeapNode *HEAP_insert(Heap *heap, double value, void *ptr)
 		heap->tree = realloc(heap->tree, heap->bufsize * sizeof(*heap->tree));
 	}
 
-	node = heap_node_alloc(heap);
+	node = heap_pool_elem_alloc(&heap->pool);
 
 	node->ptr = ptr;
 	node->value = value;
@@ -308,7 +242,7 @@ void *HEAP_popmin(Heap *heap)
 
 	assert(heap->size != 0);
 
-	heap_node_free(heap, heap->tree[0]);
+	heap_pool_elem_free(&heap->pool, heap->tree[0]);
 
 	if (--heap->size) {
 		heap_swap(heap, 0, heap->size);

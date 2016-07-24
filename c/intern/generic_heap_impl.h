@@ -24,10 +24,10 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __HEAP_IMPL_H__
-#define __HEAP_IMPL_H__
+#ifndef __GENERIC_HEAP_IMPL_H__
+#define __GENERIC_HEAP_IMPL_H__
 
-/** \file heap_impl.h
+/** \file generic_heap_impl.h
  *  \ingroup curve_fit
  */
 
@@ -51,4 +51,4 @@ HeapNode    *HEAP_top(Heap *heap);
 double       HEAP_top_value(Heap *heap);
 double       HEAP_node_value(HeapNode *node);
 
-#endif  /* __HEAP_IMPL_H__ */
+#endif  /* __GENERIC_HEAP_IMPL_H__ */
