@@ -79,14 +79,20 @@ struct Knot {
 
 	HeapNode *heap_node;
 
-	uint point_index;  /* index in point array */
-	uint knot_index;   /* index in knot array*/
-	double handles[2];
+	/**
+	 * Currently the same, access as different for now
+	 * since we may want to support different point/knot indices
+	 */
+	union {
+		uint point_index;
+		uint knot_index;
+	};
 
 	uint can_remove : 1;
 	uint is_removed : 1;
 	uint is_corner  : 1;
 
+	double handles[2];
 	/**
 	 * store the error value, to see if we can improve on it
 	 * (without having to re-calculate each time)
