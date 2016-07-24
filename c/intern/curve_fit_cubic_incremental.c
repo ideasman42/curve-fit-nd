@@ -414,17 +414,14 @@ static void knot_refit_error_recalculate(
 			r->knot_index_refit = SPLIT_POINT_INVALID;
 
 			r->handles_prev[0] = handles[0];
-			r->handles_prev[1] = 0.0;
-
-			r->handles_next[0] = 0.0;
+			r->handles_prev[1] = 0.0;  /* unused */
+			r->handles_next[0] = 0.0;  /* unused */
 			r->handles_next[1] = handles[1];
 
 			r->error_sq[0] = r->error_sq[1] = cost_sq;
 
-			/* always remove first! (make a negative number) */
-			const double cost_sq_inv = (cost_sq != 0.0) ? -1.0 / cost_sq : -DBL_MAX;
-
-			k->heap_node = HEAP_insert(heap, cost_sq_inv, r);
+			/* always perform removal before refitting, (make a negative number) */
+			k->heap_node = HEAP_insert(heap, cost_sq - error_sq_max, r);
 
 			return;
 		}
@@ -448,6 +445,7 @@ static void knot_refit_error_recalculate(
 	struct Knot *k_refit = &knots[refit_index];
 
 	const double cost_sq_src_max = MAX2(k->prev->error_sq_next, k->error_sq_next);
+	assert(cost_sq_src_max <= error_sq_max);
 
 	double cost_sq_dst[2];
 	double handles_prev[2], handles_next[2];

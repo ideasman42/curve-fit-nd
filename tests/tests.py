@@ -273,7 +273,7 @@ class TestDataFile_Helper:
             export_svg(name, curve, points, measure_points)
 
         # scale the error up to allow for some minor discrepancy in USE_REFINE
-        self.assertLess(error_test, error * 1.1)
+        self.assertLess(error_test, error * 1.01)
 
 
 class FreehandTest(unittest.TestCase, TestDataFile_Helper):
