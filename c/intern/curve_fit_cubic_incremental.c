@@ -57,8 +57,6 @@
 #define USE_LENGTH_CACHE
 
 
-
-
 #define SPLIT_POINT_INVALID ((uint)-1)
 
 #  define MIN2(x, y) ((x) < (y) ? (x) : (y))
@@ -68,6 +66,13 @@
 
 typedef unsigned int uint;
 
+struct PointData {
+	const double *points;
+	uint          points_len;
+#ifdef USE_LENGTH_CACHE
+	const double *points_length_cache;
+#endif
+};
 
 typedef struct Knot {
 	struct Knot *next, *prev;
@@ -107,17 +112,15 @@ struct KnotRemoveState {
  * Find the most distant point between the 2 knots.
  */
 static uint knot_find_split_point(
-        const double *points, const uint points_len,
+        const struct PointData *pd,
         const struct Knot *knot_l, const struct Knot *knot_r,
         const uint knots_len,
         const uint dims)
 {
-	(void)points_len;
-
 	uint split_point = SPLIT_POINT_INVALID;
 	double split_point_dist_best = -DBL_MAX;
 
-	const double *offset = &points[knot_l->knot_index * dims];
+	const double *offset = &pd->points[knot_l->knot_index * dims];
 
 #ifdef USE_VLA
 	double v_plane[dims];
@@ -131,8 +134,8 @@ static uint knot_find_split_point(
 
 	sub_vn_vnvn(
 	        v_plane,
-	        &points[knot_l->knot_index * dims],
-	        &points[knot_r->knot_index * dims],
+	        &pd->points[knot_l->knot_index * dims],
+	        &pd->points[knot_r->knot_index * dims],
 	        dims);
 
 	normalize_vn(v_plane, dims);
@@ -149,7 +152,7 @@ static uint knot_find_split_point(
 		}
 
 		if (k_step != knot_r) {
-			sub_vn_vnvn(v_offset, &points[k_step->knot_index * dims], offset, dims);
+			sub_vn_vnvn(v_offset, &pd->points[k_step->knot_index * dims], offset, dims);
 			project_plane_vn_vnvn_normalized(v_proj, v_offset, v_plane, dims);
 
 			double split_point_dist_test = len_squared_vn(v_proj, dims);
@@ -175,14 +178,12 @@ static uint knot_find_split_point(
  * This is to be used as a split point.
  */
 static uint knot_find_split_point_on_axis(
-        const double *points, const uint points_len,
+        const struct PointData *pd,
         const struct Knot *knot_l, const struct Knot *knot_r,
         const uint knots_len,
         const double *plane_no,
         const uint dims)
 {
-	(void)points_len;
-
 	uint split_point = SPLIT_POINT_INVALID;
 	double split_point_dist_best = -DBL_MAX;
 
@@ -198,7 +199,7 @@ static uint knot_find_split_point_on_axis(
 		}
 
 		if (k_step != knot_r) {
-			double split_point_dist_test = dot_vnvn(plane_no, &points[k_step->knot_index * dims], dims);
+			double split_point_dist_test = dot_vnvn(plane_no, &pd->points[k_step->knot_index * dims], dims);
 			if (split_point_dist_test > split_point_dist_best) {
 				split_point_dist_best = split_point_dist_test;
 				split_point = k_step->knot_index;
@@ -251,8 +252,7 @@ static double knot_remove_error_value(
 }
 
 static double knot_calc_curve_error_value(
-        const double *points, const uint points_len,
-        const double *points_length_cache,
+        const struct PointData *pd,
         const struct Knot *knot_l, const struct Knot *knot_r,
         const double *tan_l, const double *tan_r,
         const uint dims,
@@ -264,7 +264,7 @@ static double knot_calc_curve_error_value(
 		points_offset_len = (knot_r->point_index - knot_l->point_index) + 1;
 	}
 	else {
-		points_offset_len = ((knot_r->point_index + points_len) - knot_l->point_index) + 1;
+		points_offset_len = ((knot_r->point_index + pd->points_len) - knot_l->point_index) + 1;
 	}
 
 	if (points_offset_len == 2) {
@@ -273,16 +273,19 @@ static double knot_calc_curve_error_value(
 
 	return knot_remove_error_value(
 	        tan_l, tan_r,
-	        &points[knot_l->point_index * dims], points_offset_len,
-	        &points_length_cache[knot_l->point_index],
+	        &pd->points[knot_l->point_index * dims], points_offset_len,
+#ifdef USE_LENGTH_CACHE
+	        &pd->points_length_cache[knot_l->point_index],
+#else
+	        NULL,
+#endif
 	        dims,
 	        r_handle_factors);
 }
 
 static void knot_remove_error_recalculate(
         Heap *heap,
-        const double *points, const uint points_len,
-        const double *points_length_cache,
+        const struct PointData *pd,
         struct Knot *k, const double error_sq_max,
         const uint dims)
 {
@@ -290,8 +293,7 @@ static void knot_remove_error_recalculate(
 	double handles[2];
 
 	const double cost_sq = knot_calc_curve_error_value(
-	        points, points_len,
-	        points_length_cache,
+	        pd,
 	        k->prev, k->next,
 	        k->prev->tan[1], k->next->tan[0],
 	        dims,
@@ -330,8 +332,7 @@ static void knot_remove_error_recalculate(
  * Return length after being reduced.
  */
 static uint curve_incremental_simplify(
-        const double *points, const uint points_len,
-        const double *points_length_cache,
+        const struct PointData *pd,
         struct Knot *knots, const uint knots_len, uint knots_len_remaining,
         double error_sq_max, const uint dims)
 {
@@ -339,7 +340,7 @@ static uint curve_incremental_simplify(
 	for (uint i = 0; i < knots_len; i++) {
 		struct Knot *k = &knots[i];
 		if (k->can_remove && (k->is_removed == false) && (k->is_corner == false)) {
-			knot_remove_error_recalculate(heap, points, points_len, points_length_cache, k, error_sq_max, dims);
+			knot_remove_error_recalculate(heap, pd, k, error_sq_max, dims);
 		}
 	}
 
@@ -371,11 +372,11 @@ static uint curve_incremental_simplify(
 		k->is_removed = true;
 
 		if (k_prev->can_remove && (k_prev->is_corner == false)) {
-			knot_remove_error_recalculate(heap, points, points_len, points_length_cache, k_prev, error_sq_max, dims);
+			knot_remove_error_recalculate(heap, pd, k_prev, error_sq_max, dims);
 		}
 
 		if (k_next->can_remove && (k_next->is_corner == false)) {
-			knot_remove_error_recalculate(heap, points, points_len, points_length_cache, k_next, error_sq_max, dims);
+			knot_remove_error_recalculate(heap, pd, k_next, error_sq_max, dims);
 		}
 
 		knots_len_remaining -= 1;
@@ -400,8 +401,7 @@ struct KnotRefitState {
 
 static void knot_refit_error_recalculate(
         Heap *heap,
-        const double *points, const uint points_len,
-        const double *points_length_cache,
+        const struct PointData *pd,
         struct Knot *knots, const uint knots_len,
         struct Knot *k,
         const double error_sq_max,
@@ -415,8 +415,7 @@ static void knot_refit_error_recalculate(
 
 		/* first check if we can remove, this allows to refit and remove as we go */
 		const double cost_sq = knot_calc_curve_error_value(
-		        points, points_len,
-		        points_length_cache,
+		        pd,
 		        k->prev, k->next,
 		        k->prev->tan[1], k->next->tan[0],
 		        dims,
@@ -453,7 +452,7 @@ static void knot_refit_error_recalculate(
 #endif  /* USE_KNOT_REFIT_REMOVE */
 
 	const uint refit_index = knot_find_split_point(
-	         points, points_len,
+	         pd,
 	         k->prev, k->next,
 	         knots_len,
 	         dims);
@@ -473,15 +472,13 @@ static void knot_refit_error_recalculate(
 	double handles_prev[2], handles_next[2];
 
 	if ((((cost_sq_dst[0] = knot_calc_curve_error_value(
-	           points, points_len,
-	           points_length_cache,
+	           pd,
 	           k->prev, k_refit,
 	           k->prev->tan[1], k_refit->tan[0],
 	           dims,
 	           handles_prev)) < cost_sq_src_max) &&
 	     ((cost_sq_dst[1] = knot_calc_curve_error_value(
-	           points, points_len,
-	           points_length_cache,
+	           pd,
 	           k_refit, k->next,
 	           k_refit->tan[1], k->next->tan[0],
 	           dims,
@@ -536,8 +533,7 @@ remove:
  * test the error from moving using points between the adjacent.
  */
 static uint curve_incremental_simplify_refit(
-        const double *points, const uint points_len,
-        const double *points_length_cache,
+        const struct PointData *pd,
         struct Knot *knots, const uint knots_len, uint knots_len_remaining,
         const double error_sq_max,
         const uint dims)
@@ -550,7 +546,7 @@ static uint curve_incremental_simplify_refit(
 		    (k->is_corner == false) &&
 		    (k->prev && k->next))
 		{
-			knot_refit_error_recalculate(heap, points, points_len, points_length_cache, knots, knots_len, k, error_sq_max, dims);
+			knot_refit_error_recalculate(heap, pd, knots, knots_len, k, error_sq_max, dims);
 		}
 	}
 
@@ -607,11 +603,11 @@ static uint curve_incremental_simplify_refit(
 		}
 
 		if (k_prev->can_remove && (k_prev->is_corner == false) && (k_prev->prev && k_prev->next)) {
-			knot_refit_error_recalculate(heap, points, points_len, points_length_cache, knots, knots_len, k_prev, error_sq_max, dims);
+			knot_refit_error_recalculate(heap, pd, knots, knots_len, k_prev, error_sq_max, dims);
 		}
 
 		if (k_next->can_remove && (k_next->is_corner == false) && (k_next->prev && k_next->next)) {
-			knot_refit_error_recalculate(heap, points, points_len, points_length_cache, knots, knots_len, k_next, error_sq_max, dims);
+			knot_refit_error_recalculate(heap, pd, knots, knots_len, k_next, error_sq_max, dims);
 		}
 	}
 
@@ -643,8 +639,7 @@ struct KnotCornerState {
  */
 static void knot_corner_error_recalculate(
         Heap *heap,
-        const double *points, const uint points_len,
-        const double *points_length_cache,
+        const struct PointData *pd,
         struct Knot *k_split,
         struct Knot *k_prev, struct Knot *k_next,
         const double error_sq_max,
@@ -657,15 +652,13 @@ static void knot_corner_error_recalculate(
 	double cost_sq_dst[2];
 
 	if (((cost_sq_dst[0] = knot_calc_curve_error_value(
-	          points, points_len,
-	          points_length_cache,
+	          pd,
 	          k_prev, k_split,
 	          k_prev->tan[1], k_prev->tan[1],
 	          dims,
 	          handles_prev)) < error_sq_max) &&
 	    ((cost_sq_dst[1] = knot_calc_curve_error_value(
-	          points, points_len,
-	          points_length_cache,
+	          pd,
 	          k_split, k_next,
 	          k_next->tan[0], k_next->tan[0],
 	          dims,
@@ -714,8 +707,7 @@ static void knot_corner_error_recalculate(
  * as long as they fall below the error threshold.
  */
 static uint curve_incremental_simplify_corners(
-        const double *points, const uint points_len,
-        const double *points_length_cache,
+        const struct PointData *pd,
         struct Knot *knots, const uint knots_len, uint knots_len_remaining,
         const double error_sq_max, const double error_sq_3x_max,
         const double corner_angle,
@@ -754,7 +746,7 @@ static uint curve_incremental_simplify_corners(
 
 				/* compare 3x so as to allow both to be changed by maximum of error_sq_max */
 				const uint split_knot_index = knot_find_split_point_on_axis(
-				        points, points_len,
+				        pd,
 				        k_prev, k_next,
 				        knots_len,
 				        plane_no,
@@ -762,21 +754,20 @@ static uint curve_incremental_simplify_corners(
 
 				if (split_knot_index != SPLIT_POINT_INVALID) {
 
-					project_vn_vnvn(k_proj_ref,   &points[k_prev->point_index * dims], k_prev->tan[1], dims);
-					project_vn_vnvn(k_proj_split, &points[split_knot_index    * dims], k_prev->tan[1], dims);
+					project_vn_vnvn(k_proj_ref,   &pd->points[k_prev->point_index * dims], k_prev->tan[1], dims);
+					project_vn_vnvn(k_proj_split, &pd->points[split_knot_index    * dims], k_prev->tan[1], dims);
 
 					if (len_squared_vnvn(k_proj_ref, k_proj_split, dims) < error_sq_3x_max) {
 
-						project_vn_vnvn(k_proj_ref,   &points[k_next->point_index * dims], k_next->tan[0], dims);
-						project_vn_vnvn(k_proj_split, &points[split_knot_index    * dims], k_next->tan[0], dims);
+						project_vn_vnvn(k_proj_ref,   &pd->points[k_next->point_index * dims], k_next->tan[0], dims);
+						project_vn_vnvn(k_proj_split, &pd->points[split_knot_index    * dims], k_next->tan[0], dims);
 
 						if (len_squared_vnvn(k_proj_ref, k_proj_split, dims) < error_sq_3x_max) {
 
 							struct Knot *k_split = &knots[split_knot_index];
 
 							knot_corner_error_recalculate(
-							        heap, points, points_len,
-							        points_length_cache,
+							        heap, pd,
 							        k_split,
 							        k_prev, k_next,
 							        error_sq_max,
@@ -1016,13 +1007,20 @@ int curve_fit_cubic_to_points_incremental_db(
 	}
 #endif
 
+	const struct PointData pd = {
+		.points = points,
+		.points_len = points_len,
+#ifdef USE_LENGTH_CACHE
+		.points_length_cache = points_length_cache,
+#endif
+	};
+
 	uint knots_len_remaining = knots_len;
 
 	/* 'curve_incremental_simplify_refit' can be called here, but its very slow
 	 * just remove all within the threshold first. */
 	knots_len_remaining = curve_incremental_simplify(
-	        points, points_len,
-	        points_length_cache,
+	        &pd,
 	        knots, knots_len, knots_len_remaining,
 	        SQUARE(error_threshold), dims);
 
@@ -1033,8 +1031,7 @@ int curve_fit_cubic_to_points_incremental_db(
 		}
 
 		knots_len_remaining = curve_incremental_simplify_corners(
-		        points, points_len,
-		        points_length_cache,
+		        &pd,
 		        knots, knots_len, knots_len_remaining,
 		        SQUARE(error_threshold), SQUARE(error_threshold * 3),
 		        corner_angle,
@@ -1045,8 +1042,7 @@ int curve_fit_cubic_to_points_incremental_db(
 
 #ifdef USE_KNOT_REFIT
 	knots_len_remaining = curve_incremental_simplify_refit(
-	        points, points_len,
-	        points_length_cache,
+	        &pd,
 	        knots, knots_len, knots_len_remaining,
 	        SQUARE(error_threshold),
 	        dims);
