@@ -101,6 +101,7 @@ struct Knot {
 	double *tan[2];
 } Knot;
 
+
 struct KnotRemoveState {
 	uint index;
 	/* handles for prev/next knots */
@@ -261,29 +262,34 @@ static double knot_calc_curve_error_value(
         const uint dims,
         double r_handle_factors[2])
 {
-	uint points_offset_len;
+	const uint points_offset_len = ((knot_l->index < knot_r->index) ?
+	        (knot_r->index - knot_l->index) :
+	        ((knot_r->index + pd->points_len) - knot_l->index)) + 1;
 
-	if (knot_l->index < knot_r->index) {
-		points_offset_len = (knot_r->index - knot_l->index) + 1;
+	if (points_offset_len != 2) {
+		return knot_remove_error_value(
+		        tan_l, tan_r,
+		        &pd->points[knot_l->index * dims], points_offset_len,
+#ifdef USE_LENGTH_CACHE
+		        &pd->points_length_cache[knot_l->index],
+#else
+		        NULL,
+#endif
+		        dims,
+		        r_handle_factors);
 	}
 	else {
-		points_offset_len = ((knot_r->index + pd->points_len) - knot_l->index) + 1;
-	}
-
-	if (points_offset_len == 2) {
+		/* No points between, use 1/3 handle length with no error as a fallback. */
+		assert(points_offset_len == 2);
+#ifdef USE_LENGTH_CACHE
+		r_handle_factors[0] =  r_handle_factors[1] = pd->points_length_cache[knot_l->index] / 3.0;
+#else
+		r_handle_factors[0] = r_handle_factors[1] = len_vnvn(
+		        &pd->points[(knot_l->index + 0) * dims],
+		        &pd->points[(knot_l->index + 1) * dims], dims) / 3.0;
+#endif
 		return 0.0;
 	}
-
-	return knot_remove_error_value(
-	        tan_l, tan_r,
-	        &pd->points[knot_l->index * dims], points_offset_len,
-#ifdef USE_LENGTH_CACHE
-	        &pd->points_length_cache[knot_l->index],
-#else
-	        NULL,
-#endif
-	        dims,
-	        r_handle_factors);
 }
 
 static void knot_remove_error_recalculate(
@@ -373,11 +379,11 @@ static uint curve_incremental_simplify(
 		k->prev = NULL;
 		k->is_removed = true;
 
-		if (k_prev->can_remove && (k_prev->is_corner == false)) {
+		if (k_prev->can_remove && (k_prev->is_corner == false) && (k_prev->prev && k_prev->next)) {
 			knot_remove_error_recalculate(heap, pd, k_prev, error_sq_max, dims);
 		}
 
-		if (k_next->can_remove && (k_next->is_corner == false)) {
+		if (k_next->can_remove && (k_next->is_corner == false) && (k_next->prev && k_next->next)) {
 			knot_remove_error_recalculate(heap, pd, k_next, error_sq_max, dims);
 		}
 
@@ -851,7 +857,7 @@ int curve_fit_cubic_to_points_incremental_db(
 (void)corners;
 (void)corners_len;
 
-	const bool is_cyclic = (calc_flag & CURVE_FIT_CALC_CYCLIC) != 0;
+	const bool is_cyclic = (calc_flag & CURVE_FIT_CALC_CYCLIC) != 0 && (points_len > 2);
 #ifdef USE_CORNER_DETECT
 	const bool use_corner = (corner_angle < M_PI);
 #else
