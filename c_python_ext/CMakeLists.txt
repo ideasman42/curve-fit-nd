@@ -70,14 +70,14 @@ set(SRC
 	../c/intern/curve_fit_cubic.c
 	../c/intern/curve_fit_cubic_refit.c
 
+	../c/curve_fit_nd.h
 	../c/intern/curve_fit_inline.h
 
 	# generic helpers
-	../c/intern/generic_alloc_impl.h
-	../c/intern/generic_heap_impl.c
+	../c/intern/generic_heap.c
 
-	../c/intern/generic_heap_impl.h
-	../c/curve_fit_nd.h
+	../c/intern/generic_alloc_impl.h
+	../c/intern/generic_heap.h
 )
 
 include_directories(

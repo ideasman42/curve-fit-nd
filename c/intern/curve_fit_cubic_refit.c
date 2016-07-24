@@ -27,7 +27,7 @@
 #include "curve_fit_inline.h"
 #include "../curve_fit_nd.h"
 
-#include "generic_heap_impl.h"
+#include "generic_heap.h"
 
 #ifdef _MSC_VER
 #  define alloca(size) _alloca(size)

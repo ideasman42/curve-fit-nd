@@ -33,7 +33,7 @@
 #include <stdbool.h>
 #include <assert.h>
 
-#include "generic_heap_impl.h"
+#include "generic_heap.h"
 
 /* swap with a temp value */
 #define SWAP_TVAL(tval, a, b)  {  \
