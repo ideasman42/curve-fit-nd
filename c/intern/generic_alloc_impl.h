@@ -5,13 +5,19 @@
  * - TPOOL_IMPL_PREFIX: Prefix to use for the API.
  * - TPOOL_ALLOC_TYPE: Struct type this pool handles.
  * - TPOOL_STRUCT: Name for pool struct name.
-
+ * - TPOOL_CHUNK_SIZE: Chunk size (optional), use 64kb when not defined.
+ *
+ * \note TPOOL_ALLOC_TYPE must be at least ``sizeof(void *)``.
+ *
+ * Defines the API.
+ *
+ * -
  */
 
 /* check we're not building directly */
-#if !defined(TPOOL_ALLOC_TYPE) || \
-	!defined(TPOOL_STRUCT) || \
-	!defined(TPOOL_IMPL_PREFIX)
+#if !defined(TPOOL_IMPL_PREFIX) || \
+    !defined(TPOOL_ALLOC_TYPE) || \
+    !defined(TPOOL_STRUCT)
 #  error "This file can't be compiled directly, include in another source file"
 #endif
 
@@ -27,18 +33,34 @@
 #define pool_elem_free		_TPOOL_PREFIX(pool_elem_free)
 #define pool_elem_alloc		_TPOOL_PREFIX(pool_elem_alloc)
 
-#define pool_alloc_chunk	_TPOOL_PREFIX(pool_alloc_chunk)
-
 /* private identifiers (only for this file, undefine after) */
+#define pool_alloc_chunk	_TPOOL_PREFIX(pool_alloc_chunk)
 #define TPoolChunk			_TPOOL_PREFIX(TPoolChunk)
 #define TPoolChunkElemFree	_TPOOL_PREFIX(TPoolChunkElemFree)
+
+#ifndef TPOOL_CHUNK_SIZE
+#define  TPOOL_CHUNK_SIZE (1 << 16)  /* 64kb */
+#define _TPOOL_CHUNK_SIZE_UNDEF
+#endif
+
+#ifdef __GNUC__
+#  define UNLIKELY(x)     __builtin_expect(!!(x), 0)
+#else
+#  define UNLIKELY(x)     (x)
+#endif
+
+#ifdef __GNUC__
+#  define MAYBE_UNUSED __attribute__((unused))
+#else
+#  define MAYBE_UNUSED
+#endif
 
 
 struct TPoolChunk {
 	struct TPoolChunk *prev;
 	unsigned int    size;
 	unsigned int    bufsize;
-	struct TPOOL_ALLOC_TYPE buf[0];
+	TPOOL_ALLOC_TYPE buf[0];
 };
 
 struct TPoolChunkElemFree {
@@ -76,7 +98,7 @@ static struct TPoolChunk *pool_alloc_chunk(
 	return chunk;
 }
 
-static struct TPOOL_ALLOC_TYPE *pool_elem_alloc(struct TPOOL_STRUCT *pool)
+static TPOOL_ALLOC_TYPE *pool_elem_alloc(struct TPOOL_STRUCT *pool)
 {
 	TPOOL_ALLOC_TYPE *elem;
 
@@ -108,6 +130,7 @@ static void pool_create(struct TPOOL_STRUCT *pool, unsigned int tot_reserve)
 	pool->free = NULL;
 }
 
+MAYBE_UNUSED
 static void pool_clear(struct TPOOL_STRUCT *pool)
 {
 	/* Remove all except the last chunk */
@@ -143,3 +166,8 @@ static void pool_destroy(struct TPOOL_STRUCT *pool)
 
 #undef TPoolChunk
 #undef TPoolChunkElemFree
+
+#ifdef _TPOOL_CHUNK_SIZE_UNDEF
+#  undef  TPOOL_CHUNK_SIZE
+#  undef _TPOOL_CHUNK_SIZE_UNDEF
+#endif

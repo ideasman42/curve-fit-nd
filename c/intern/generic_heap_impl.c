@@ -48,6 +48,7 @@
 #  define UNLIKELY(x)     (x)
 #endif
 
+
 /***/
 
 struct HeapNode {
@@ -56,16 +57,14 @@ struct HeapNode {
 	unsigned int index;
 };
 
+/* heap_* pool allocator */
 #define TPOOL_IMPL_PREFIX  heap
 #define TPOOL_ALLOC_TYPE   HeapNode
 #define TPOOL_STRUCT       HeapMemPool
-
 #include "generic_alloc_impl.h"
-
 #undef TPOOL_IMPL_PREFIX
 #undef TPOOL_ALLOC_TYPE
 #undef TPOOL_STRUCT
-
 
 struct Heap {
 	unsigned int size;

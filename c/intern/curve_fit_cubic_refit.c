@@ -55,6 +55,8 @@
 #define USE_CORNER_DETECT
 /* avoid re-calculating lengths multiple times */
 #define USE_LENGTH_CACHE
+/* use pool allocator */
+#define USE_TPOOL
 
 
 #define SPLIT_POINT_INVALID ((uint)-1)
@@ -108,10 +110,68 @@ struct KnotRemoveState {
 	double handles[2];
 };
 
+#ifdef USE_TPOOL
+/* rstate_* pool allocator */
+#define TPOOL_IMPL_PREFIX  rstate
+#define TPOOL_ALLOC_TYPE   struct KnotRemoveState
+#define TPOOL_STRUCT       ElemPool_KnotRemoveState
+#include "generic_alloc_impl.h"
+#undef TPOOL_IMPL_PREFIX
+#undef TPOOL_ALLOC_TYPE
+#undef TPOOL_STRUCT
+#endif  /* USE_TPOOL */
+
+#ifdef USE_KNOT_REFIT
+struct KnotRefitState {
+	uint index;
+	/** When SPLIT_POINT_INVALID - remove this item */
+	uint index_refit;
+	/** handles for prev/next knots */
+	double handles_prev[2], handles_next[2];
+	double error_sq[2];
+};
+
+#ifdef USE_TPOOL
+/* refit_* pool allocator */
+#define TPOOL_IMPL_PREFIX  refit
+#define TPOOL_ALLOC_TYPE   struct KnotRefitState
+#define TPOOL_STRUCT       ElemPool_KnotRefitState
+#include "generic_alloc_impl.h"
+#undef TPOOL_IMPL_PREFIX
+#undef TPOOL_ALLOC_TYPE
+#undef TPOOL_STRUCT
+#endif  /* USE_TPOOL */
+#endif  /* USE_KNOT_REFIT */
+
+
+#ifdef USE_CORNER_DETECT
+/** Result of collapsing a corner. */
+struct KnotCornerState {
+	uint index;
+	/* merge adjacent handles into this one (may be shared with the 'index') */
+	uint index_adjacent[2];
+
+	/* handles for prev/next knots */
+	double handles_prev[2], handles_next[2];
+	double error_sq[2];
+};
+
+/* refit_* pool allocator */
+#ifdef USE_TPOOL
+#define TPOOL_IMPL_PREFIX  corner
+#define TPOOL_ALLOC_TYPE   struct KnotCornerState
+#define TPOOL_STRUCT       ElemPool_KnotCornerState
+#include "generic_alloc_impl.h"
+#undef TPOOL_IMPL_PREFIX
+#undef TPOOL_ALLOC_TYPE
+#undef TPOOL_STRUCT
+#endif  /* USE_TPOOL */
+#endif  /* USE_CORNER_DETECT */
+
 
 /* utility funtions */
-#ifdef USE_KNOT_REFIT
 
+#ifdef USE_KNOT_REFIT
 /**
  * Find the most distant point between the 2 knots.
  */
@@ -292,9 +352,16 @@ static double knot_calc_curve_error_value(
 	}
 }
 
+struct KnotRemove_Params {
+	Heap *heap;
+	const struct PointData *pd;
+#ifdef USE_TPOOL
+	struct ElemPool_KnotRemoveState *epool;
+#endif
+};
+
 static void knot_remove_error_recalculate(
-        Heap *heap,
-        const struct PointData *pd,
+        struct KnotRemove_Params *p,
         struct Knot *k, const double error_sq_max,
         const uint dims)
 {
@@ -302,7 +369,7 @@ static void knot_remove_error_recalculate(
 	double handles[2];
 
 	const double cost_sq = knot_calc_curve_error_value(
-	        pd, k->prev, k->next,
+	        p->pd, k->prev, k->next,
 	        k->prev->tan[1], k->next->tan[0],
 	        dims,
 	        handles);
@@ -311,25 +378,34 @@ static void knot_remove_error_recalculate(
 		struct KnotRemoveState *r;
 		if (k->heap_node) {
 			r = HEAP_node_ptr(k->heap_node);
-			HEAP_remove(heap, k->heap_node);
+			HEAP_remove(p->heap, k->heap_node);
 		}
 		else {
+#ifdef USE_TPOOL
+			r = rstate_pool_elem_alloc(p->epool);
+#else
 			r = malloc(sizeof(*r));
+#endif
+
 			r->index = k->index;
 		}
 
 		r->handles[0] = handles[0];
 		r->handles[1] = handles[1];
 
-		k->heap_node = HEAP_insert(heap, cost_sq, r);
+		k->heap_node = HEAP_insert(p->heap, cost_sq, r);
 	}
 	else {
 		if (k->heap_node) {
 			struct KnotRemoveState *r;
 			r = HEAP_node_ptr(k->heap_node);
-			HEAP_remove(heap, k->heap_node);
+			HEAP_remove(p->heap, k->heap_node);
 
+#ifdef USE_TPOOL
+			rstate_pool_elem_free(p->epool, r);
+#else
 			free(r);
+#endif
 
 			k->heap_node = NULL;
 		}
@@ -344,11 +420,27 @@ static uint curve_incremental_simplify(
         struct Knot *knots, const uint knots_len, uint knots_len_remaining,
         double error_sq_max, const uint dims)
 {
+
+#ifdef USE_TPOOL
+	struct ElemPool_KnotRemoveState epool;
+
+	rstate_pool_create(&epool, 0);
+#endif
+
 	Heap *heap = HEAP_new(knots_len);
+
+	struct KnotRemove_Params params = {
+	    .pd = pd,
+	    .heap = heap,
+#ifdef USE_TPOOL
+	    .epool = &epool,
+#endif
+	};
+
 	for (uint i = 0; i < knots_len; i++) {
 		struct Knot *k = &knots[i];
 		if (k->can_remove && (k->is_removed == false) && (k->is_corner == false)) {
-			knot_remove_error_recalculate(heap, pd, k, error_sq_max, dims);
+			knot_remove_error_recalculate(&params, k, error_sq_max, dims);
 		}
 	}
 
@@ -365,7 +457,11 @@ static uint curve_incremental_simplify(
 
 			k->prev->error_sq_next = error_sq;
 
+#ifdef USE_TPOOL
+			rstate_pool_elem_free(&epool, r);
+#else
 			free(r);
+#endif
 		}
 
 		struct Knot *k_prev = k->prev;
@@ -380,15 +476,19 @@ static uint curve_incremental_simplify(
 		k->is_removed = true;
 
 		if (k_prev->can_remove && (k_prev->is_corner == false) && (k_prev->prev && k_prev->next)) {
-			knot_remove_error_recalculate(heap, pd, k_prev, error_sq_max, dims);
+			knot_remove_error_recalculate(&params, k_prev, error_sq_max, dims);
 		}
 
 		if (k_next->can_remove && (k_next->is_corner == false) && (k_next->prev && k_next->next)) {
-			knot_remove_error_recalculate(heap, pd, k_next, error_sq_max, dims);
+			knot_remove_error_recalculate(&params, k_next, error_sq_max, dims);
 		}
 
 		knots_len_remaining -= 1;
 	}
+
+#ifdef USE_TPOOL
+	rstate_pool_destroy(&epool);
+#endif
 
 	HEAP_free(heap, free);
 
@@ -398,18 +498,16 @@ static uint curve_incremental_simplify(
 
 #ifdef USE_KNOT_REFIT
 
-struct KnotRefitState {
-	uint index;
-	/** When SPLIT_POINT_INVALID - remove this item */
-	uint index_refit;
-	/** handles for prev/next knots */
-	double handles_prev[2], handles_next[2];
-	double error_sq[2];
+struct KnotRefit_Params {
+	Heap *heap;
+	const struct PointData *pd;
+#ifdef USE_TPOOL
+	struct ElemPool_KnotRefitState *epool;
+#endif
 };
 
 static void knot_refit_error_recalculate(
-        Heap *heap,
-        const struct PointData *pd,
+        struct KnotRefit_Params *p,
         struct Knot *knots, const uint knots_len,
         struct Knot *k,
         const double error_sq_max,
@@ -423,7 +521,7 @@ static void knot_refit_error_recalculate(
 
 		/* first check if we can remove, this allows to refit and remove as we go */
 		const double cost_sq = knot_calc_curve_error_value(
-		        pd, k->prev, k->next,
+		        p->pd, k->prev, k->next,
 		        k->prev->tan[1], k->next->tan[0],
 		        dims,
 		        handles);
@@ -432,10 +530,14 @@ static void knot_refit_error_recalculate(
 			struct KnotRefitState *r;
 			if (k->heap_node) {
 				r = HEAP_node_ptr(k->heap_node);
-				HEAP_remove(heap, k->heap_node);
+				HEAP_remove(p->heap, k->heap_node);
 			}
 			else {
+#ifdef USE_TPOOL
+				r = refit_pool_elem_alloc(p->epool);
+#else
 				r = malloc(sizeof(*r));
+#endif
 				r->index = k->index;
 			}
 
@@ -449,7 +551,7 @@ static void knot_refit_error_recalculate(
 			r->error_sq[0] = r->error_sq[1] = cost_sq;
 
 			/* always perform removal before refitting, (make a negative number) */
-			k->heap_node = HEAP_insert(heap, cost_sq - error_sq_max, r);
+			k->heap_node = HEAP_insert(p->heap, cost_sq - error_sq_max, r);
 
 			return;
 		}
@@ -459,7 +561,7 @@ static void knot_refit_error_recalculate(
 #endif  /* USE_KNOT_REFIT_REMOVE */
 
 	const uint refit_index = knot_find_split_point(
-	         pd, k->prev, k->next,
+	         p->pd, k->prev, k->next,
 	         knots_len,
 	         dims);
 
@@ -478,12 +580,12 @@ static void knot_refit_error_recalculate(
 	double handles_prev[2], handles_next[2];
 
 	if ((((cost_sq_dst[0] = knot_calc_curve_error_value(
-	           pd, k->prev, k_refit,
+	           p->pd, k->prev, k_refit,
 	           k->prev->tan[1], k_refit->tan[0],
 	           dims,
 	           handles_prev)) < cost_sq_src_max) &&
 	     ((cost_sq_dst[1] = knot_calc_curve_error_value(
-	           pd, k_refit, k->next,
+	           p->pd, k_refit, k->next,
 	           k_refit->tan[1], k->next->tan[0],
 	           dims,
 	           handles_next)) < cost_sq_src_max)))
@@ -492,10 +594,14 @@ static void knot_refit_error_recalculate(
 			struct KnotRefitState *r;
 			if (k->heap_node) {
 				r = HEAP_node_ptr(k->heap_node);
-				HEAP_remove(heap, k->heap_node);
+				HEAP_remove(p->heap, k->heap_node);
 			}
 			else {
+#ifdef USE_TPOOL
+				r = refit_pool_elem_alloc(p->epool);
+#else
 				r = malloc(sizeof(*r));
+#endif
 				r->index = k->index;
 			}
 
@@ -515,7 +621,7 @@ static void knot_refit_error_recalculate(
 			assert(cost_sq_dst_max < cost_sq_src_max);
 
 			/* opt for the greatest improvement */
-			k->heap_node = HEAP_insert(heap, cost_sq_src_max - cost_sq_dst_max, r);
+			k->heap_node = HEAP_insert(p->heap, cost_sq_src_max - cost_sq_dst_max, r);
 		}
 	}
 	else {
@@ -523,9 +629,13 @@ remove:
 		if (k->heap_node) {
 			struct KnotRefitState *r;
 			r = HEAP_node_ptr(k->heap_node);
-			HEAP_remove(heap, k->heap_node);
+			HEAP_remove(p->heap, k->heap_node);
 
+#ifdef USE_TPOOL
+			refit_pool_elem_free(p->epool, r);
+#else
 			free(r);
+#endif
 
 			k->heap_node = NULL;
 		}
@@ -542,7 +652,22 @@ static uint curve_incremental_simplify_refit(
         const double error_sq_max,
         const uint dims)
 {
+#ifdef USE_TPOOL
+	struct ElemPool_KnotRefitState epool;
+
+	refit_pool_create(&epool, 0);
+#endif
+
 	Heap *heap = HEAP_new(knots_len);
+
+	struct KnotRefit_Params params = {
+	    .pd = pd,
+	    .heap = heap,
+#ifdef USE_TPOOL
+	    .epool = &epool,
+#endif
+	};
+
 	for (uint i = 0; i < knots_len; i++) {
 		struct Knot *k = &knots[i];
 		if (k->can_remove &&
@@ -550,7 +675,7 @@ static uint curve_incremental_simplify_refit(
 		    (k->is_corner == false) &&
 		    (k->prev && k->next))
 		{
-			knot_refit_error_recalculate(heap, pd, knots, knots_len, k, error_sq_max, dims);
+			knot_refit_error_recalculate(&params, knots, knots_len, k, error_sq_max, dims);
 		}
 	}
 
@@ -577,7 +702,11 @@ static uint curve_incremental_simplify_refit(
 			k_old->prev->handles[1] = r->handles_prev[0];
 			k_old->next->handles[0] = r->handles_next[1];
 
+#ifdef USE_TPOOL
+			refit_pool_elem_free(&epool, r);
+#else
 			free(r);
+#endif
 		}
 
 		struct Knot *k_prev = k_old->prev;
@@ -607,13 +736,17 @@ static uint curve_incremental_simplify_refit(
 		}
 
 		if (k_prev->can_remove && (k_prev->is_corner == false) && (k_prev->prev && k_prev->next)) {
-			knot_refit_error_recalculate(heap, pd, knots, knots_len, k_prev, error_sq_max, dims);
+			knot_refit_error_recalculate(&params, knots, knots_len, k_prev, error_sq_max, dims);
 		}
 
 		if (k_next->can_remove && (k_next->is_corner == false) && (k_next->prev && k_next->next)) {
-			knot_refit_error_recalculate(heap, pd, knots, knots_len, k_next, error_sq_max, dims);
+			knot_refit_error_recalculate(&params, knots, knots_len, k_next, error_sq_max, dims);
 		}
 	}
+
+#ifdef USE_TPOOL
+	refit_pool_destroy(&epool);
+#endif
 
 	HEAP_free(heap, free);
 
@@ -625,25 +758,19 @@ static uint curve_incremental_simplify_refit(
 
 #ifdef USE_CORNER_DETECT
 
-/**
- * Result of collapsing a corner.
- */
-struct KnotCornerState {
-	uint index;
-	/* merge adjacent handles into this one (may be shared with the 'index') */
-	uint index_adjacent[2];
-
-	/* handles for prev/next knots */
-	double handles_prev[2], handles_next[2];
-	double error_sq[2];
+struct KnotCorner_Params {
+	Heap *heap;
+	const struct PointData *pd;
+#ifdef USE_TPOOL
+	struct ElemPool_KnotCornerState *epool;
+#endif
 };
 
 /**
  * (Re)calculate the error incurred from turning this into a corner.
  */
 static void knot_corner_error_recalculate(
-        Heap *heap,
-        const struct PointData *pd,
+        struct KnotCorner_Params *p,
         struct Knot *k_split,
         struct Knot *k_prev, struct Knot *k_next,
         const double error_sq_max,
@@ -656,12 +783,12 @@ static void knot_corner_error_recalculate(
 	double cost_sq_dst[2];
 
 	if (((cost_sq_dst[0] = knot_calc_curve_error_value(
-	          pd, k_prev, k_split,
+	          p->pd, k_prev, k_split,
 	          k_prev->tan[1], k_prev->tan[1],
 	          dims,
 	          handles_prev)) < error_sq_max) &&
 	    ((cost_sq_dst[1] = knot_calc_curve_error_value(
-	          pd, k_split, k_next,
+	          p->pd, k_split, k_next,
 	          k_next->tan[0], k_next->tan[0],
 	          dims,
 	          handles_next)) < error_sq_max))
@@ -669,10 +796,14 @@ static void knot_corner_error_recalculate(
 		struct KnotCornerState *c;
 		if (k_split->heap_node) {
 			c = HEAP_node_ptr(k_split->heap_node);
-			HEAP_remove(heap, k_split->heap_node);
+			HEAP_remove(p->heap, k_split->heap_node);
 		}
 		else {
+#ifdef USE_TPOOL
+			c = corner_pool_elem_alloc(p->epool);
+#else
 			c = malloc(sizeof(*c));
+#endif
 			c->index = k_split->index;
 		}
 
@@ -690,14 +821,18 @@ static void knot_corner_error_recalculate(
 		c->error_sq[1] = cost_sq_dst[1];
 
 		const double cost_max_sq = MAX2(cost_sq_dst[0], cost_sq_dst[1]);
-		k_split->heap_node = HEAP_insert(heap, cost_max_sq, c);
+		k_split->heap_node = HEAP_insert(p->heap, cost_max_sq, c);
 	}
 	else {
 		if (k_split->heap_node) {
 			struct KnotCornerState *c;
 			c = HEAP_node_ptr(k_split->heap_node);
-			HEAP_remove(heap, k_split->heap_node);
+			HEAP_remove(p->heap, k_split->heap_node);
+#ifdef USE_TPOOL
+			corner_pool_elem_free(p->epool, c);
+#else
 			free(c);
+#endif
 			k_split->heap_node = NULL;
 		}
 	}
@@ -716,7 +851,21 @@ static uint curve_incremental_simplify_corners(
         const uint dims,
         uint *r_corner_index_len)
 {
+#ifdef USE_TPOOL
+	struct ElemPool_KnotCornerState epool;
+
+	corner_pool_create(&epool, 0);
+#endif
+
 	Heap *heap = HEAP_new(0);
+
+	struct KnotCorner_Params params = {
+	    .pd = pd,
+	    .heap = heap,
+#ifdef USE_TPOOL
+	    .epool = &epool,
+#endif
+	};
 
 #ifdef USE_VLA
 	double plane_no[dims];
@@ -768,7 +917,8 @@ static uint curve_incremental_simplify_corners(
 							struct Knot *k_split = &knots[split_index];
 
 							knot_corner_error_recalculate(
-							        heap, pd, k_split, k_prev, k_next,
+							        &params,
+							        k_split, k_prev, k_next,
 							        error_sq_max,
 							        dims);
 						}
@@ -809,17 +959,22 @@ static uint curve_incremental_simplify_corners(
 
 		k_split->heap_node = NULL;
 
+#ifdef USE_TPOOL
+		corner_pool_elem_free(&epool, c);
+#else
 		free(c);
+#endif
 
-		// printf("Reducing!\n");
-printf("Found Corner! %d\n", k_split->index);
 		k_split->is_corner = true;
-		// k_split->can_remove = false;  /* not essential, but we dont want to remove for now */
 
 		knots_len_remaining++;
 
 		corner_index_len++;
 	}
+
+#ifdef USE_TPOOL
+	corner_pool_destroy(&epool);
+#endif
 
 	HEAP_free(heap, free);
 
