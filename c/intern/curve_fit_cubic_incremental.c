@@ -1,6 +1,3 @@
-
-/* TODO, collapse at end-points for non-cyclic curves! - Dont just collapse curves */
-
 /**
  * - first iteratively remove all points under threshold.
  * - If corner calculation is enabled:
@@ -17,11 +14,6 @@
  *
  * - run a re-fit pass, where knots are re-positioned between their adjacent knots
  *   when their re-fit position has a lower 'error' or force re-fit is set.
- *
- *   Note that its possible the force-refit error is above the threshold,
- *   in this case we could try different fits (though this is rather a kludge).
- *   Another option could be to revert its corner status, also not ideal
- *   but at least it keeps the curve in a valid state.
  */
 
 #include <math.h>
@@ -697,7 +689,7 @@ static void knot_corner_error_recalculate(
 static uint curve_incremental_simplify_corners(
         const double *points, const uint points_len,
         struct Knot *knots, const uint knots_len, uint knots_len_remaining,
-        const double error_sq_max, const double error_sq_2x_max,
+        const double error_sq_max, const double error_sq_3x_max,
         const double corner_angle,
         const uint dims,
         uint *r_corner_index_len)
@@ -726,7 +718,7 @@ static uint curve_incremental_simplify_corners(
 				 * since the points may be offset along their own tangents. */
 				sub_vn_vnvn(plane_no, k_next->tan[0], k_prev->tan[1], dims);
 
-				/* compare 2x so as to allow both to be changed by maximum of error_sq_max */
+				/* compare 3x so as to allow both to be changed by maximum of error_sq_max */
 				const uint split_knot_index = knot_find_split_point_on_axis(
 				        points, points_len,
 				        k_prev, k_next,
@@ -739,12 +731,12 @@ static uint curve_incremental_simplify_corners(
 					project_vn_vnvn(k_proj_ref,   &points[k_prev->point_index * dims], k_prev->tan[1], dims);
 					project_vn_vnvn(k_proj_split, &points[split_knot_index    * dims], k_prev->tan[1], dims);
 
-					if (len_squared_vnvn(k_proj_ref, k_proj_split, dims) < error_sq_2x_max) {
+					if (len_squared_vnvn(k_proj_ref, k_proj_split, dims) < error_sq_3x_max) {
 
 						project_vn_vnvn(k_proj_ref,   &points[k_next->point_index * dims], k_next->tan[0], dims);
 						project_vn_vnvn(k_proj_split, &points[split_knot_index    * dims], k_next->tan[0], dims);
 
-						if (len_squared_vnvn(k_proj_ref, k_proj_split, dims) < error_sq_2x_max) {
+						if (len_squared_vnvn(k_proj_ref, k_proj_split, dims) < error_sq_3x_max) {
 
 							struct Knot *k_split = &knots[split_knot_index];
 
@@ -889,38 +881,36 @@ int curve_fit_cubic_to_points_incremental_db(
 		knots[knots_len - 1].can_remove = false;
 	}
 
-#if 0
-	/* 2x normalize calculations, but correct */
-	for (uint i = 0; i < knots_len; i++) {
-		Knot *k = &knots[i];
-		double a[dims];
-		double b[dims];
-
-		if (k->prev) {
-			sub_vn_vnvn(a, &points[k->prev->point_index * dims], &points[k->point_index * dims], dims);
-			normalize_vn(a, dims);
-		}
-		else {
-			zero_vn(a, dims);
-		}
-
-		if (k->next) {
-			sub_vn_vnvn(b, &points[k->point_index * dims], &points[k->next->point_index * dims], dims);
-			normalize_vn(b, dims);
-		}
-		else {
-			zero_vn(b, dims);
-		}
-
-		add_vn_vnvn(k->tan[0], a, b, dims);
-		normalize_vn(k->tan[0], dims);
-		copy_vnvn(k->tan[1], k->tan[0], dims);
-	}
-#else
 	{
 		double tan_prev[dims];
 		double tan_next[dims];
+#if 1
+		/* 2x normalize calculations, but correct */
 
+		for (uint i = 0; i < knots_len; i++) {
+			Knot *k = &knots[i];
+
+			if (k->prev) {
+				sub_vn_vnvn(tan_prev, &points[k->prev->point_index * dims], &points[k->point_index * dims], dims);
+				normalize_vn(tan_prev, dims);
+			}
+			else {
+				zero_vn(tan_prev, dims);
+			}
+
+			if (k->next) {
+				sub_vn_vnvn(tan_next, &points[k->point_index * dims], &points[k->next->point_index * dims], dims);
+				normalize_vn(tan_next, dims);
+			}
+			else {
+				zero_vn(tan_next, dims);
+			}
+
+			add_vn_vnvn(k->tan[0], tan_prev, tan_next, dims);
+			normalize_vn(k->tan[0], dims);
+			copy_vnvn(k->tan[1], k->tan[0], dims);
+		}
+#else
 		if (is_cyclic) {
 			normalize_vn_vnvn(tan_prev, &points[(knots_len - 2) * dims], &points[(knots_len - 1) * dims], dims);
 			for (uint i_curr = knots_len - 1, i_next = 0; i_next < knots_len; i_curr = i_next++) {
@@ -949,8 +939,8 @@ int curve_fit_cubic_to_points_incremental_db(
 			copy_vnvn(knots[knots_len - 1].tan[0], tan_next, dims);
 			copy_vnvn(knots[knots_len - 1].tan[1], tan_next, dims);
 		}
-	}
 #endif
+	}
 
 
 #if 0
@@ -984,7 +974,7 @@ if (1) {
 		knots_len_remaining = curve_incremental_simplify_corners(
 		        points, points_len,
 		        knots, knots_len, knots_len_remaining,
-		        SQUARE(error_threshold), SQUARE(error_threshold * 8),
+		        SQUARE(error_threshold), SQUARE(error_threshold * 3),
 		        corner_angle,
 		        dims,
 		        r_corner_index_len);
