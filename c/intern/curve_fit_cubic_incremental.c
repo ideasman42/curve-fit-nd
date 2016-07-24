@@ -1,17 +1,14 @@
 /**
  * - first iteratively remove all points under threshold.
  * - If corner calculation is enabled:
- *
  *   - find adjacent knots that exceed the angle limit
  *   - find a 'split' point between the knots (could include the knots)
- *   - if copying the tangents to this split point doesn't exceed the error threshold.
- *
+ *   - if copying the tangents to this split point doesn't exceed the error threshold:
  *     - assign the tangents of the two knots to the split point, define it as a corner.
  *   - after this, we have many points which are too close.
  *   - run a second removal pass, this time only deal with points adjacent to the corners.
  *     some points will not be able to be removed and remain 'too close',
  *     tag these as 'use_force_refit', to be handled in the re-fit pass.
- *
  * - run a re-fit pass, where knots are re-positioned between their adjacent knots
  *   when their re-fit position has a lower 'error' or force re-fit is set.
  */
@@ -62,9 +59,7 @@
 #  define MIN2(x, y) ((x) < (y) ? (x) : (y))
 #  define MAX2(x, y) ((x) > (y) ? (x) : (y))
 
-#define SQUARE(a)  ({ \
-	typeof(a) a_ = (a); \
-	((a_) * (a_)); })
+#define SQUARE(a) ((a) * (a))
 
 typedef unsigned int uint;
 
@@ -118,9 +113,16 @@ static uint knot_find_split_point(
 	double split_point_dist_best = -DBL_MAX;
 
 	const double *offset = &points[knot_l->knot_index * dims];
+
+#ifdef USE_VLA
 	double v_plane[dims];
 	double v_proj[dims];
 	double v_offset[dims];
+#else
+	double *v_plane =   alloca(sizeof(double) * dims);
+	double *v_proj =    alloca(sizeof(double) * dims);
+	double *v_offset =  alloca(sizeof(double) * dims);
+#endif
 
 	sub_vn_vnvn(
 	        v_plane,
@@ -216,21 +218,28 @@ static double knot_remove_error_value(
         double r_handle_factors[2])
 {
 	double error_sq = FLT_MAX;
-	double handle_factors[2][dims];
+
+#ifdef USE_VLA
+	double handle_factor_l[dims];
+	double handle_factor_r[dims];
+#else
+	double *handle_factor_l = alloca(sizeof(double) * dims);
+	double *handle_factor_r = alloca(sizeof(double) * dims);
+#endif
 
 	curve_fit_cubic_to_points_single_db(
 	        points_offset, points_offset_len, dims, 0.0f,
 	        tan_l, tan_r,
-	        handle_factors[0], handle_factors[1],
+	        handle_factor_l, handle_factor_r,
 	        &error_sq);
 
 	assert(error_sq != FLT_MAX);
 
-	isub_vnvn(handle_factors[0], points_offset, dims);
-	r_handle_factors[0] = dot_vnvn(tan_l, handle_factors[0], dims);
+	isub_vnvn(handle_factor_l, points_offset, dims);
+	r_handle_factors[0] = dot_vnvn(tan_l, handle_factor_l, dims);
 
-	isub_vnvn(handle_factors[1], &points_offset[(points_offset_len - 1) * dims], dims);
-	r_handle_factors[1] = dot_vnvn(tan_r, handle_factors[1], dims);
+	isub_vnvn(handle_factor_r, &points_offset[(points_offset_len - 1) * dims], dims);
+	r_handle_factors[1] = dot_vnvn(tan_r, handle_factor_r, dims);
 
 	return error_sq;
 }
@@ -373,8 +382,9 @@ static uint curve_incremental_simplify(
 
 struct KnotRefitState {
 	uint knot_index;
-	uint knot_index_refit;  /* when SPLIT_POINT_INVALID - remove this item */
-	/* handles for prev/next knots */
+	/** When SPLIT_POINT_INVALID - remove this item */
+	uint knot_index_refit;
+	/** handles for prev/next knots */
 	double handles_prev[2], handles_next[2];
 	double error_sq[2];
 };
@@ -693,10 +703,16 @@ static uint curve_incremental_simplify_corners(
         uint *r_corner_index_len)
 {
 	Heap *heap = HEAP_new(0);
-	double plane_no[dims];
 
+#ifdef USE_VLA
+	double plane_no[dims];
 	double k_proj_ref[dims];
 	double k_proj_split[dims];
+#else
+	double *plane_no =       alloca(sizeof(double) * dims);
+	double *k_proj_ref =     alloca(sizeof(double) * dims);
+	double *k_proj_split =   alloca(sizeof(double) * dims);
+#endif
 
 	const double corner_angle_cos = cos(corner_angle);
 
@@ -837,9 +853,10 @@ int curve_fit_cubic_to_points_incremental_db(
 	(void)corner_angle;
 #endif
 
+	/* Over alloc the list x2 for cyclic curves,
+	 * so we can evalueate across the start/end */
 	double *points_alloc = NULL;
 	if (is_cyclic) {
-		/* double alloc the list so we can more easily */
 		double *points_alloc = malloc((sizeof(double) * points_len * dims) * 2);
 		memcpy(points_alloc,                       points,       sizeof(double) * points_len * dims);
 		memcpy(points_alloc + (points_len * dims), points_alloc, sizeof(double) * points_len * dims);
@@ -880,8 +897,14 @@ int curve_fit_cubic_to_points_incremental_db(
 	}
 
 	{
+#ifdef USE_VLA
 		double tan_prev[dims];
 		double tan_next[dims];
+#else
+		double *tan_prev = alloca(sizeof(double) * dims);
+		double *tan_next = alloca(sizeof(double) * dims);
+#endif
+
 #if 1
 		/* 2x normalize calculations, but correct */
 

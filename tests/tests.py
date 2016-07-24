@@ -262,6 +262,7 @@ class TestDataFile_Helper:
 
     def assertTestData(self, name, error, corner_angle=None, is_cyclic=False):
         points = test_data_load(name)
+
         curve = curve_fit(points, error, corner_angle, is_cyclic)
         # print(name + ix_id)
 
