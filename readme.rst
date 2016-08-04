@@ -48,6 +48,11 @@ However some improvements have been made.
 
   - Circle fit: which accurately fits the curve to a circle. 
   - Offset fit: which uses the offset of the curve to calculate handle length.
+- Re-fitting, an alternate, a more computationally intensive method for knot placement
+  which initializes the curve as a dense curve
+  (where every point is a knot), then iteratively removing knots which give the least error,
+  some further adjustments are made after this to avoid local-maximums giving skewed results.
+  This also has the advantage that it can be used to detect corners.
 
 
 Source Code Layout
