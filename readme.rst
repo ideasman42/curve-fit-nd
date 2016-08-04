@@ -1,10 +1,13 @@
 
 ************
-Curve Fit ND
+Curve Fit nD
 ************
 
 Cubic curve fitting library.
 
+.. figure:: https://cloud.githubusercontent.com/assets/1869379/17393989/1f8f21ba-5a6a-11e6-82cb-9d7cda155825.png
+
+   Example showing a cubic spline fit to 283 points.
 
 Usage
 =====
