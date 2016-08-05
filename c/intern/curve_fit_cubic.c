@@ -896,7 +896,7 @@ static double points_calc_coord_length(
 	}
 	assert(!is_almost_zero(r_u[points_offset_len - 1]));
 	const double w = r_u[points_offset_len - 1];
-	for (uint i = 0; i < points_offset_len; i++) {
+	for (uint i = 1; i < points_offset_len; i++) {
 		r_u[i] /= w;
 	}
 	return w;
