@@ -501,7 +501,7 @@ static double points_calc_circle_tangent_factor(
 		return (1.0 / 3.0) * 0.75;
 	}
 	else if (tan_dot < -1.0 + eps) {
-		/* parallele tangents (half-circle) */
+		/* parallel tangents (half-circle) */
 		return (1.0 / 2.0);
 	}
 	else {
@@ -566,8 +566,8 @@ static void cubic_from_points_fallback(
 	r_cubic->orig_span = (points_offset_len - 1);
 #endif
 
-	/* p1 = p0 - (tan_l * alpha_l);
-	 * p2 = p3 + (tan_r * alpha_r);
+	/* p1 = p0 - (tan_l * alpha);
+	 * p2 = p3 + (tan_r * alpha);
 	 */
 	msub_vn_vnvn_fl(p1, p0, tan_l, alpha, dims);
 	madd_vn_vnvn_fl(p2, p3, tan_r, alpha, dims);

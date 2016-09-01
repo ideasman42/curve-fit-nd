@@ -1048,7 +1048,6 @@ int curve_fit_cubic_to_points_refit_db(
 {
 	const uint knots_len = points_len;
 	struct Knot *knots = malloc(sizeof(Knot) * knots_len);
-	knots[0].next = NULL;
 
 #ifndef USE_CORNER_DETECT
 	(void)r_corner_index_array;
@@ -1084,7 +1083,6 @@ int curve_fit_cubic_to_points_refit_db(
 			knots[i].prev = (knots + i) - 1;
 
 			knots[i].heap_node = NULL;
-			knots[i].index = i;
 			knots[i].index = i;
 			knots[i].can_remove = true;
 			knots[i].is_removed = false;
