@@ -463,7 +463,7 @@ static uint curve_incremental_simplify(
 	rstate_pool_create(&epool, 0);
 #endif
 
-	Heap *heap = HEAP_new(knots_len);
+	Heap *heap = HEAP_new(knots_len_remaining);
 
 	struct KnotRemove_Params params = {
 	    .pd = pd,
@@ -698,7 +698,7 @@ static uint curve_incremental_simplify_refit(
 	refit_pool_create(&epool, 0);
 #endif
 
-	Heap *heap = HEAP_new(knots_len);
+	Heap *heap = HEAP_new(knots_len_remaining);
 
 	struct KnotRefit_Params params = {
 	    .pd = pd,
