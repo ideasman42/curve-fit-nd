@@ -1260,10 +1260,6 @@ int curve_fit_cubic_to_points_refit_db(
 
 #ifdef USE_CORNER_DETECT
 	if (use_corner) {
-		for (uint i = 0; i < knots_len; i++) {
-			assert(knots[i].heap_node == NULL);
-		}
-
 		knots_len_remaining = curve_incremental_simplify_corners(
 		        &pd, knots, knots_len, knots_len_remaining,
 		        SQUARE(error_threshold), SQUARE(error_threshold * 3),
