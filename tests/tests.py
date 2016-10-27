@@ -121,7 +121,6 @@ def export_svg(name, s, points, measure_points):
                     h1[0], h1[1],
                     k1[0], k1[1],
                     ))
-                # <path d="M100,250 C100,100 400,100 400,250" />
             fw('</g>\n')
         if points:
             fw('<g fill="yellow" fill-opacity="0.25" stroke="white" stroke-opacity="0.25" stroke-width="1">\n')
