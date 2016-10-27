@@ -36,7 +36,7 @@
 /* curve_fit_cubic.c */
 
 /**
- * Takes a flat array of points and evalues that to calculate a bezier spline.
+ * Takes a flat array of points and evaluates that to calculate a bezier spline.
  *
  * \param points, points_len: The array of points to calculate a cubics from.
  * \param dims: The number of dimensions for for each element in \a points.
@@ -82,7 +82,7 @@ int curve_fit_cubic_to_points_fl(
         unsigned int **r_corners_index_array, unsigned int *r_corners_index_len);
 
 /**
- * Takes a flat array of points and evalues that to calculate handle lengths.
+ * Takes a flat array of points and evaluates that to calculate handle lengths.
  *
  * \param points, points_len: The array of points to calculate a cubics from.
  * \param dims: The number of dimensions for for each element in \a points.
