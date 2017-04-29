@@ -292,3 +292,7 @@ class FreehandTest(unittest.TestCase, TestDataFile_Helper):
 
     def test_curve_04(self):
         self.assertTestData("test_curve_freehand_04_cyclic", 0.0075, math.radians(70), is_cyclic=True)
+
+
+if __name__ == "__main__":
+    unittest.main()
