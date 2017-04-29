@@ -1153,8 +1153,8 @@ int curve_fit_cubic_to_points_refit_db(
 			add_vn_vnvn(k->tan[0], tan_prev, tan_next, dims);
 			normalize_vn(k->tan[0], dims);
 			copy_vnvn(k->tan[1], k->tan[0], dims);
-			k->handles[0] = len_prev / 3;
-			k->handles[1] = len_next / 3;
+			k->handles[0] = len_prev /  3;
+			k->handles[1] = len_next / -3;
 		}
 #else
 		if (knots_len < 2) {
