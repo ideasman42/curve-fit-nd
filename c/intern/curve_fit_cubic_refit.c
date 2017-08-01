@@ -324,7 +324,7 @@ static double knot_remove_error_value(
         /* Avoid having to re-calculate again */
         double r_handle_factors[2], uint *r_error_index)
 {
-	double error_sq = FLT_MAX;
+	double error_sq = DBL_MAX;
 
 #ifdef USE_VLA
 	double handle_factor_l[dims];
@@ -340,7 +340,7 @@ static double knot_remove_error_value(
 	        handle_factor_l, handle_factor_r,
 	        &error_sq, r_error_index);
 
-	assert(error_sq != FLT_MAX);
+	assert(error_sq != DBL_MAX);
 
 	isub_vnvn(handle_factor_l, points_offset, dims);
 	r_handle_factors[0] = dot_vnvn(tan_l, handle_factor_l, dims);
