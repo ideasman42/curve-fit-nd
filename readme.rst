@@ -24,6 +24,16 @@ color, opacity... or other properties.
 Having arbitrary number of *dimensions* allow for this.
 
 
+Use Cases
+=========
+
+- `Blender's Freehand Drawing
+  <https://wiki.blender.org/index.php/Dev:Ref/Release_Notes/2.78/Modelling#Curve_Editing>`__.
+- A Rust port of this library is used in
+  `Raster Retrace
+  <https://github.com/ideasman42/raster-retrace>`__.
+
+
 Origin
 ======
 
