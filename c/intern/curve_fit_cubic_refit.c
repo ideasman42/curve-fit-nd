@@ -473,7 +473,6 @@ static void knot_remove_error_recalculate(
 #else
 			r = malloc(sizeof(*r));
 #endif
-
 			r->index = k->index;
 		}
 
