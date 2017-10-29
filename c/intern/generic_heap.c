@@ -216,6 +216,16 @@ HeapNode *HEAP_insert(Heap *heap, double value, void *ptr)
 	return node;
 }
 
+void HEAP_insert_or_update(Heap *heap, HeapNode **node_p, double value, void *ptr)
+{
+	if (*node_p == NULL) {
+		*node_p = HEAP_insert(heap, value, ptr);
+	}
+	else {
+		HEAP_node_value_update_ptr(heap, *node_p, value, ptr);
+	}
+}
+
 bool HEAP_is_empty(const Heap *heap)
 {
 	return (heap->size == 0);
@@ -266,6 +276,24 @@ void HEAP_remove(Heap *heap, HeapNode *node)
 	}
 
 	HEAP_popmin(heap);
+}
+
+void HEAP_node_value_update(Heap *heap, HeapNode *node, double value)
+{
+	assert(heap->size != 0);
+	if (node->value == value) {
+		return;
+	}
+	node->value = value;
+	/* Can be called in either order, makes no difference. */
+	heap_up(heap, node->index);
+	heap_down(heap, node->index);
+}
+
+void HEAP_node_value_update_ptr(Heap *heap, HeapNode *node, double value, void *ptr)
+{
+	node->ptr = ptr;
+	HEAP_node_value_update(heap, node, value);
 }
 
 double HEAP_node_value(const HeapNode *node)

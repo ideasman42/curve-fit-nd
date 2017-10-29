@@ -465,7 +465,6 @@ static void knot_remove_error_recalculate(
 		struct KnotRemoveState *r;
 		if (k->heap_node) {
 			r = HEAP_node_ptr(k->heap_node);
-			HEAP_remove(p->heap, k->heap_node);
 		}
 		else {
 #ifdef USE_TPOOL
@@ -479,7 +478,7 @@ static void knot_remove_error_recalculate(
 		r->handles[0] = handles[0];
 		r->handles[1] = handles[1];
 
-		k->heap_node = HEAP_insert(p->heap, cost_sq, r);
+		HEAP_insert_or_update(p->heap, &k->heap_node, cost_sq, r);
 	}
 	else {
 		if (k->heap_node) {
@@ -623,7 +622,6 @@ static void knot_refit_error_recalculate(
 			struct KnotRefitState *r;
 			if (k->heap_node) {
 				r = HEAP_node_ptr(k->heap_node);
-				HEAP_remove(p->heap, k->heap_node);
 			}
 			else {
 #ifdef USE_TPOOL
@@ -644,7 +642,7 @@ static void knot_refit_error_recalculate(
 			r->error_sq[0] = r->error_sq[1] = cost_sq;
 
 			/* Always perform removal before refitting, (make a negative number) */
-			k->heap_node = HEAP_insert(p->heap, cost_sq - error_sq_max, r);
+			HEAP_insert_or_update(p->heap, &k->heap_node, cost_sq - error_sq_max, r);
 
 			return;
 		}
@@ -688,7 +686,6 @@ static void knot_refit_error_recalculate(
 			struct KnotRefitState *r;
 			if (k->heap_node) {
 				r = HEAP_node_ptr(k->heap_node);
-				HEAP_remove(p->heap, k->heap_node);
 			}
 			else {
 #ifdef USE_TPOOL
@@ -715,7 +712,7 @@ static void knot_refit_error_recalculate(
 			assert(cost_sq_dst_max < cost_sq_src_max);
 
 			/* Weight for the greatest improvement */
-			k->heap_node = HEAP_insert(p->heap, cost_sq_src_max - cost_sq_dst_max, r);
+			HEAP_insert_or_update(p->heap, &k->heap_node, cost_sq_src_max - cost_sq_dst_max, r);
 		}
 	}
 	else {
@@ -894,7 +891,6 @@ static void knot_corner_error_recalculate(
 		struct KnotCornerState *c;
 		if (k_split->heap_node) {
 			c = HEAP_node_ptr(k_split->heap_node);
-			HEAP_remove(p->heap, k_split->heap_node);
 		}
 		else {
 #ifdef USE_TPOOL
@@ -919,7 +915,7 @@ static void knot_corner_error_recalculate(
 		c->error_sq[1] = cost_sq_dst[1];
 
 		const double cost_max_sq = MAX2(cost_sq_dst[0], cost_sq_dst[1]);
-		k_split->heap_node = HEAP_insert(p->heap, cost_max_sq, c);
+		HEAP_insert_or_update(p->heap, &k_split->heap_node, cost_max_sq, c);
 	}
 	else {
 		if (k_split->heap_node) {
