@@ -1,3 +1,7 @@
+#ifdef _MSC_VER
+#  define _USE_MATH_DEFINES
+#endif
+#include <math.h>
 
 #include <stdbool.h>
 
@@ -6,10 +10,9 @@
 
 #include "curve_fit_nd.h"
 
-#define DEG2RAD(_deg) ((_deg) * (M_PI / 180.0))
 
 PyDoc_STRVAR(M_Curve_fit_nd_doc,
-"TODO\n"
+"Cubic Bezier curve fitting library in n dimensions.\n"
 );
 
 
