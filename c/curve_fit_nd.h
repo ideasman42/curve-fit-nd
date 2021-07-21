@@ -47,9 +47,9 @@
  * to evaluate a line to detect corner indices.
  *
  * \param r_cubic_array, r_cubic_array_len: Resulting array of tangents and knots, formatted as follows:
- * ``r_cubic_array[r_cubic_array_len][3][dims]``,
+ * `r_cubic_array[r_cubic_array_len][3][dims]`,
  * where each point has 0 and 2 for the tangents and the middle index 1 for the knot.
- * The size of the *flat* array will be ``r_cubic_array_len * 3 * dims``.
+ * The size of the *flat* array will be `r_cubic_array_len * 3 * dims`.
  * \param r_corner_index_array, r_corner_index_len: Corner indices in \a r_cubic_array (optional).
  * This allows you to access corners on the resulting curve.
  *
