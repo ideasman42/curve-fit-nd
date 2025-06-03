@@ -1104,12 +1104,9 @@ int curve_fit_cubic_to_points_refit_db(
 	(void)r_corner_index_len;
 #endif
 
-(void)corners;
-(void)corners_len;
-
 	const bool is_cyclic = (calc_flag & CURVE_FIT_CALC_CYCLIC) != 0 && (points_len > 2);
 #ifdef USE_CORNER_DETECT
-	const bool use_corner = (corner_angle < M_PI);
+	const bool use_corner_detect = (corner_angle < M_PI);
 #else
 	(void)corner_angle;
 #endif
@@ -1155,6 +1152,29 @@ int curve_fit_cubic_to_points_refit_db(
 		/* always keep end-points */
 		knots[0].can_remove = false;
 		knots[knots_len - 1].can_remove = false;
+	}
+
+	/* Initialize corners and corner tangents. */
+	if (corners != NULL && corners_len > 0) {
+		const uint knots_end = knots_len - 1;
+		const uint corners_start = is_cyclic ? 0 : 1;
+		const uint corners_len_clamped = is_cyclic ? corners_len : corners_len - 1;
+
+		for (uint corner_i = corners_start; corner_i < corners_len_clamped; corner_i++) {
+			const uint i_curr = corners[corner_i];
+			const uint i_prev = (is_cyclic && i_curr == 0) ? knots_end : i_curr - 1;
+			const uint i_next = (is_cyclic && i_curr == knots_end) ? 0 : i_curr + 1;
+
+			struct Knot *k = &knots[i_curr];
+			k->handles[0] = normalize_vn_vnvn(
+			        k->tan[0], &points[i_prev * dims], &points[i_curr * dims], dims) /  3;
+			k->handles[1] = normalize_vn_vnvn(
+			        k->tan[1], &points[i_curr * dims], &points[i_next * dims], dims) / -3;
+
+			k->is_corner = true;
+		}
+
+		*r_corner_index_len = corners_len;
 	}
 
 #ifdef USE_LENGTH_CACHE
@@ -1230,11 +1250,13 @@ int curve_fit_cubic_to_points_refit_db(
 #endif
 				len_next = normalize_vn_vnvn(tan_next, &points[i_curr * dims], &points[i_next * dims], dims);
 
-				add_vn_vnvn(k->tan[0], tan_prev, tan_next, dims);
-				normalize_vn(k->tan[0], dims);
-				copy_vnvn(k->tan[1], k->tan[0], dims);
-				k->handles[0] = len_prev /  3;
-				k->handles[1] = len_next / -3;
+				if (k->is_corner == false) {
+					add_vn_vnvn(k->tan[0], tan_prev, tan_next, dims);
+					normalize_vn(k->tan[0], dims);
+					copy_vnvn(k->tan[1], k->tan[0], dims);
+					k->handles[0] = len_prev /  3;
+					k->handles[1] = len_next / -3;
+				}
 
 				copy_vnvn(tan_prev, tan_next, dims);
 				len_prev = len_next;
@@ -1247,10 +1269,12 @@ int curve_fit_cubic_to_points_refit_db(
 #endif
 			len_prev = normalize_vn_vnvn(
 			        tan_prev, &points[0 * dims], &points[1 * dims], dims);
-			copy_vnvn(knots[0].tan[0], tan_prev, dims);
-			copy_vnvn(knots[0].tan[1], tan_prev, dims);
-			knots[0].handles[0] = len_prev /  3;
-			knots[0].handles[1] = len_prev / -3;
+			if (knots[0].is_corner == false) {
+				copy_vnvn(knots[0].tan[0], tan_prev, dims);
+				copy_vnvn(knots[0].tan[1], tan_prev, dims);
+				knots[0].handles[0] = len_prev /  3;
+				knots[0].handles[1] = len_prev / -3;
+			}
 
 			for (uint i_curr = 1, i_next = 2; i_next < knots_len; i_curr = i_next++) {
 				struct Knot *k = &knots[i_curr];
@@ -1260,20 +1284,25 @@ int curve_fit_cubic_to_points_refit_db(
 #endif
 				len_next = normalize_vn_vnvn(tan_next, &points[i_curr * dims], &points[i_next * dims], dims);
 
-				add_vn_vnvn(k->tan[0], tan_prev, tan_next, dims);
-				normalize_vn(k->tan[0], dims);
-				copy_vnvn(k->tan[1], k->tan[0], dims);
-				k->handles[0] = len_prev /  3;
-				k->handles[1] = len_next / -3;
+				if (k->is_corner == false) {
+					add_vn_vnvn(k->tan[0], tan_prev, tan_next, dims);
+					normalize_vn(k->tan[0], dims);
+					copy_vnvn(k->tan[1], k->tan[0], dims);
+					k->handles[0] = len_prev /  3;
+					k->handles[1] = len_next / -3;
+				}
 
 				copy_vnvn(tan_prev, tan_next, dims);
 				len_prev = len_next;
 			}
-			copy_vnvn(knots[knots_len - 1].tan[0], tan_next, dims);
-			copy_vnvn(knots[knots_len - 1].tan[1], tan_next, dims);
 
-			knots[knots_len - 1].handles[0] = len_next /  3;
-			knots[knots_len - 1].handles[1] = len_next / -3;
+			if (knots[knots_len - 1].is_corner == false) {
+				copy_vnvn(knots[knots_len - 1].tan[0], tan_next, dims);
+				copy_vnvn(knots[knots_len - 1].tan[1], tan_next, dims);
+
+				knots[knots_len - 1].handles[0] = len_next /  3;
+				knots[knots_len - 1].handles[1] = len_next / -3;
+			}
 		}
 #endif
 	}
@@ -1309,7 +1338,7 @@ int curve_fit_cubic_to_points_refit_db(
 	        SQUARE(error_threshold), dims);
 
 #ifdef USE_CORNER_DETECT
-	if (use_corner) {
+	if (use_corner_detect) {
 
 #ifdef DEBUG
 		for (uint i = 0; i < knots_len; i++) {
@@ -1335,14 +1364,15 @@ int curve_fit_cubic_to_points_refit_db(
 
 
 #ifdef USE_CORNER_DETECT
-	if (use_corner) {
-		if (is_cyclic == false) {
+	if (use_corner_detect || corners != NULL) {
+		if (is_cyclic == false && corners == NULL) {
 			*r_corner_index_len += 2;
 		}
 
 		uint *corner_index_array = malloc(sizeof(uint) * (*r_corner_index_len));
 		uint k_index = 0, c_index = 0;
 		uint i = 0;
+		const uint knots_len_clamped = is_cyclic ? knots_len : knots_len - 1;
 
 		if (is_cyclic == false) {
 			corner_index_array[c_index++] = k_index;
@@ -1350,7 +1380,7 @@ int curve_fit_cubic_to_points_refit_db(
 			i++;
 		}
 
-		for (; i < knots_len; i++) {
+		for (; i < knots_len_clamped; i++) {
 			if (knots[i].is_removed == false) {
 				if (knots[i].is_corner == true) {
 					corner_index_array[c_index++] = k_index;
@@ -1359,13 +1389,17 @@ int curve_fit_cubic_to_points_refit_db(
 			}
 		}
 
-		if (is_cyclic == false) {
+		if (is_cyclic == false && knots_len > 1) {
 			corner_index_array[c_index++] = k_index;
 			k_index++;
 		}
 
 		assert(c_index == *r_corner_index_len);
 		*r_corner_index_array = corner_index_array;
+	}
+	else {
+		*r_corner_index_array = NULL;
+		*r_corner_index_len = 0;
 	}
 #endif  /* USE_CORNER_DETECT */
 
