@@ -39,11 +39,15 @@ PyDoc_STRVAR(M_Curve_fit_nd_curve_from_points_doc,
 "\n"
 "   Returns the newly calculated curve.\n"
 "\n"
-"   :arg line: Points representing a line\n"
-"   :type line: list\n"
+"   :arg points: Points representing a curve to be fitted.\n"
+"   :type points: list\n"
 "   :arg error: Error threshold.\n"
 "   :type error: float\n"
-"   :return: The point of intersection or None if no intersection is found\n"
+"   :arg corner_angle: Angle threshold for corner detection (radians).\n"
+"   :type corner_angle: float\n"
+"   :arg is_cyclic: Whether the curve is cyclic (closed).\n"
+"   :type is_cyclic: bool\n"
+"   :return: List of (original_index, (handle_left, knot, handle_right)) tuples.\n"
 "   :rtype: list of float tuples\n"
 );
 static PyObject *M_Curve_fit_nd_curve_from_points(PyObject *self, PyObject *args)

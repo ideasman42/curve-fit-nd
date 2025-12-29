@@ -21,7 +21,7 @@ and get back a Bézier curve that fits within an error margin.
 By supporting multiple dimensions, this allows for 2D and 3D curve fitting,
 however you may want to define other properties such as radius along the curve,
 color, opacity... or other properties.
-Having arbitrary number of *dimensions* allow for this.
+Having an arbitrary number of *dimensions* allows for this.
 
 
 Use Cases
@@ -37,7 +37,7 @@ Use Cases
 Origin
 ======
 
-The method used here can be found in graphics gems ``FitCurve.c``
+The method used here can be found in Graphics Gems ``FitCurve.c``
 (by Philip J. Schneider, 1990).
 
 This implementation was taken from OpenToonz, with some additional improvements.
@@ -46,22 +46,22 @@ This implementation was taken from OpenToonz, with some additional improvements.
 Fitting Method
 ==============
 
-This uses a least square solver from the original graphics gems example.
+This uses a least-squares solver from the original Graphics Gems example.
 
 However some improvements have been made.
 
 - Arbitrary number of dimensions.
 - Replace bound-box clamping with a distance limit from the weighted center.
-- Improved *fallback* methods, when the least square solution fails.
+- Improved *fallback* methods, when the least-squares solution fails.
 
   This includes:
 
-  - Circle fit: which accurately fits the curve to a circle. 
+  - Circle fit: which accurately fits the curve to a circle.
   - Offset fit: which uses the offset of the curve to calculate handle length.
-- Re-fitting, an alternate, a more computationally intensive method for knot placement
+- Re-fitting: an alternate, more computationally intensive method for knot placement
   which initializes the curve as a dense curve
-  (where every point is a knot), then iteratively removing knots which give the least error,
-  some further adjustments are made after this to avoid local-maximums giving skewed results.
+  (where every point is a knot), then iteratively removes knots which give the least error.
+  Some further adjustments are made after this to avoid local maxima giving skewed results.
   This also has the advantage that it can be used to detect corners.
 
 

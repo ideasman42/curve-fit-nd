@@ -43,13 +43,13 @@
 
 #include "../curve_fit_nd.h"
 
-/** Take curvature into account when calculating the least square solution isn't usable. */
+/** Take curvature into account when calculating the least-squares solution isn't usable. */
 #define USE_CIRCULAR_FALLBACK
 
 /**
  * Use the maximum distance of any points from the direct line between 2 points
  * to calculate how long the handles need to be.
- * Can do a 'perfect' reversal of subdivision when for curve has symmetrical handles and doesn't change direction
+ * Can do a 'perfect' reversal of subdivision when the curve has symmetrical handles and doesn't change direction
  * (as with an 'S' shape).
  */
 #define USE_OFFSET_FALLBACK
@@ -354,7 +354,7 @@ static double cubic_calc_error(
 
 #ifdef USE_OFFSET_FALLBACK
 /**
- * A version #cubic_calc_error where we don't need the split-index and can exit early when over the limit.
+ * A version of 'cubic_calc_error' where we don't need the split-index and can exit early when over the limit.
  */
 static double cubic_calc_error_simple(
         const Cubic *cubic,
@@ -391,7 +391,7 @@ static double cubic_calc_error_simple(
 #endif
 
 /**
- * Bezier multipliers
+ * Bezier multipliers.
  */
 
 static double B1(double u)
@@ -494,7 +494,7 @@ static double points_calc_circumference_factor(
  * Return the value which the distance between points will need to be scaled by,
  * to define a handle, given both points are on a perfect circle.
  *
- * \note the return value will need to be multiplied by 1.3... for correct results.
+ * \note The return value will need to be multiplied by ~1.33 for correct results.
  */
 static double points_calc_circle_tangent_factor(
         const double  tan_l[],
@@ -523,8 +523,8 @@ static double points_calc_circle_tangent_factor(
 }
 
 /**
- * Calculate the scale the handles, which serves as a best-guess
- * used as a fallback when the least-square solution fails.
+ * Calculate the scale of the handles, which serves as a best-guess
+ * used as a fallback when the least-squares solution fails.
  */
 static double points_calc_cubic_scale(
         const double v_l[], const double v_r[],
@@ -633,7 +633,7 @@ static void cubic_from_points_offset_fallback(
 	 * are perpendicular to the direction defined by the two points.
 	 *
 	 * Project tangents onto these perpendicular lengths.
-	 * Note that this can cause divide by zero in the case of co-linear tangents.
+	 * Note that this can cause divide by zero in the case of collinear tangents.
 	 * The limits check afterwards accounts for this.
 	 *
 	 * The 'dists[..] + dir_dirs' limit is just a rough approximation.
@@ -749,13 +749,9 @@ static void cubic_from_points(
 	}
 
 	/*
-	 * The problem that the stupid values for alpha dare not put
-	 * only when we realize that the sign and wrong,
-	 * but even if the values are too high.
-	 * But how do you evaluate it?
-	 *
-	 * Meanwhile, we should ensure that these values are sometimes
-	 * so only problems absurd of approximation and not for bugs in the code.
+	 * When the least-squares solution produces invalid alpha values,
+	 * we need to fall back to a simpler approximation. Invalid values
+	 * can occur due to numerical instability or degenerate point configurations.
 	 */
 
 	bool use_clamp = true;
@@ -885,7 +881,7 @@ static void points_calc_coord_length_cache(
 #endif  /* USE_LENGTH_CACHE */
 
 /**
- * \return the accumulated length of \a points_offset.
+ * \return The accumulated length of \a points_offset.
  */
 static double points_calc_coord_length(
         const double *points_offset,
@@ -929,7 +925,7 @@ static double points_calc_coord_length(
  * \param p: Point to test against.
  * \param u: Parameter value for \a p.
  *
- * \note Return value may be `nan` caller must check for this.
+ * \note Return value may be `nan`; caller must check for this.
  */
 static double cubic_find_root(
         const Cubic *cubic,
@@ -982,7 +978,7 @@ static bool cubic_reparameterize(
         double       *r_u_prime)
 {
 	/*
-	 * Recalculate the values of u[] based on the Newton Raphson method
+	 * Recalculate the values of u[] based on the Newton-Raphson method.
 	 */
 
 	const double *pt = points_offset;
@@ -1074,7 +1070,7 @@ static bool fit_cubic_to_points(
 	if (!(error_max_sq < error_threshold_sq)) {
 		/* Don't use the cubic calculated above, instead calculate a new fallback cubic,
 		 * since this tends to give more balanced split_index along the curve.
-		 * This is because the attempt to calcualte the cubic may contain spikes
+		 * This is because the attempt to calculate the cubic may contain spikes
 		 * along the curve which may give a lop-sided maximum distance. */
 		cubic_from_points_fallback(
 		        points_offset, points_offset_len,
@@ -1203,10 +1199,10 @@ static void fit_cubic_to_points_recursive(
 
 	/* Fitting failed -- split at max error point and fit recursively. */
 
-	/* Check splinePoint is not an endpoint?
+	/* Check split_index is not an endpoint?
 	 *
-	 * This assert happens sometimes...
-	 * Look into it but disable for now. Campbell! */
+	 * This assert triggers in some edge cases.
+	 * TODO: investigate further, disabled for now. */
 
 	// assert(split_index > 1)
 #ifdef USE_VLA
@@ -1266,8 +1262,8 @@ static void fit_cubic_to_points_recursive(
 /**
  * Main function:
  *
- * Take an array of 3d points.
- * return the cubic splines
+ * Takes an array of n-dimensional points.
+ * Returns the cubic splines.
  */
 int curve_fit_cubic_to_points_db(
         const double *points,
@@ -1409,7 +1405,7 @@ int curve_fit_cubic_to_points_db(
 }
 
 /**
- * A version of #curve_fit_cubic_to_points_db to handle floats
+ * A version of #curve_fit_cubic_to_points_db to handle floats.
  */
 int curve_fit_cubic_to_points_fl(
         const float  *points,
@@ -1474,7 +1470,7 @@ int curve_fit_cubic_to_points_single_db(
 {
 	Cubic *cubic = alloca(cubic_alloc_size(dims));
 
-	/* In this instance there are no advantage in using length cache,
+	/* In this instance there is no advantage in using length cache,
 	 * since we're not recursively calculating values. */
 #ifdef USE_LENGTH_CACHE
 	double *points_length_cache_alloc = NULL;

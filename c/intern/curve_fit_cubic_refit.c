@@ -28,13 +28,13 @@
  * Curve Re-fitting Method
  * =======================
  *
- * This is a more processor intensive method of fitting,
+ * This is a more processor-intensive method of fitting,
  * compared to #curve_fit_cubic_to_points_db, and works as follows:
  *
  * - First iteratively remove all points under the error threshold.
  * - If corner calculation is enabled:
- *   - Find adjacent knots that exceed the angle limit
- *   - Find a 'split' point between the knots (could include the knots)
+ *   - Find adjacent knots that exceed the angle limit.
+ *   - Find a 'split' point between the knots (could include the knots).
  *   - If copying the tangents to this split point doesn't exceed the error threshold:
  *     - Assign the tangents of the two knots to the split point, define it as a corner.
  *       (after this, we have many points which are too close).
@@ -80,15 +80,15 @@ typedef unsigned int uint;
 #  endif
 #endif
 
-/* adjust the knots after simplifying */
+/* Adjust the knots after simplifying. */
 #define USE_KNOT_REFIT
-/* remove knots under the error threshold while re-fitting */
+/* Remove knots under the error threshold while re-fitting. */
 #define USE_KNOT_REFIT_REMOVE
-/* detect corners over an angle threshold */
+/* Detect corners over an angle threshold. */
 #define USE_CORNER_DETECT
-/* avoid re-calculating lengths multiple times */
+/* Avoid re-calculating lengths multiple times. */
 #define USE_LENGTH_CACHE
-/* use pool allocator */
+/* Use pool allocator. */
 #define USE_TPOOL
 
 
@@ -132,22 +132,22 @@ struct Knot {
 	 * Store the error value, to see if we can improve on it
 	 * (without having to re-calculate each time)
 	 *
-	 * This is the error between this knot and the next */
+	 * This is the error between this knot and the next. */
 	double error_sq_next;
 
-	/* Initially point to contiguous memory, however we may re-assign */
+	/* Initially point to contiguous memory, however we may re-assign. */
 	double *tan[2];
 };
 
 
 struct KnotRemoveState {
 	uint index;
-	/* Handles for prev/next knots */
+	/* Handles for prev/next knots. */
 	double handles[2];
 };
 
 #ifdef USE_TPOOL
-/* rstate_* pool allocator */
+/* rstate_* pool allocator. */
 #define TPOOL_IMPL_PREFIX  rstate
 #define TPOOL_ALLOC_TYPE   struct KnotRemoveState
 #define TPOOL_STRUCT       ElemPool_KnotRemoveState
@@ -160,15 +160,15 @@ struct KnotRemoveState {
 #ifdef USE_KNOT_REFIT
 struct KnotRefitState {
 	uint index;
-	/** When SPLIT_POINT_INVALID - remove this item */
+	/** When SPLIT_POINT_INVALID - remove this item. */
 	uint index_refit;
-	/** Handles for prev/next knots */
+	/** Handles for prev/next knots. */
 	double handles_prev[2], handles_next[2];
 	double error_sq[2];
 };
 
 #ifdef USE_TPOOL
-/* refit_* pool allocator */
+/* refit_* pool allocator. */
 #define TPOOL_IMPL_PREFIX  refit
 #define TPOOL_ALLOC_TYPE   struct KnotRefitState
 #define TPOOL_STRUCT       ElemPool_KnotRefitState
@@ -184,15 +184,15 @@ struct KnotRefitState {
 /** Result of collapsing a corner. */
 struct KnotCornerState {
 	uint index;
-	/* Merge adjacent handles into this one (may be shared with the 'index') */
+	/* Merge adjacent handles into this one (may be shared with the 'index'). */
 	uint index_adjacent[2];
 
-	/* Handles for prev/next knots */
+	/* Handles for prev/next knots. */
 	double handles_prev[2], handles_next[2];
 	double error_sq[2];
 };
 
-/* refit_* pool allocator */
+/* corner_* pool allocator. */
 #ifdef USE_TPOOL
 #define TPOOL_IMPL_PREFIX  corner
 #define TPOOL_ALLOC_TYPE   struct KnotCornerState
@@ -205,7 +205,7 @@ struct KnotCornerState {
 #endif  /* USE_CORNER_DETECT */
 
 
-/* Utility functions */
+/* Utility functions. */
 
 #if defined(USE_KNOT_REFIT) && !defined(USE_KNOT_REFIT_REMOVE)
 /**
@@ -247,7 +247,7 @@ static uint knot_find_split_point(
 			k_step += 1;
 		}
 		else {
-			/* wrap around */
+			/* Wrap around. */
 			k_step = k_step - knots_end;
 		}
 
@@ -294,7 +294,7 @@ static uint knot_find_split_point_on_axis(
 			k_step += 1;
 		}
 		else {
-			/* wrap around */
+			/* Wrap around. */
 			k_step = k_step - knots_end;
 		}
 
@@ -321,7 +321,7 @@ static double knot_remove_error_value(
         const double *points_offset, const uint points_offset_len,
         const double *points_offset_length_cache,
         const uint dims,
-        /* Avoid having to re-calculate again */
+        /* Avoid having to re-calculate again. */
         double r_handle_factors[2], uint *r_error_index)
 {
 	double error_sq = DBL_MAX;
@@ -556,7 +556,7 @@ static uint curve_incremental_simplify(
 		struct Knot *k_prev = k->prev;
 		struct Knot *k_next = k->next;
 
-		/* Remove ourselves */
+		/* Remove ourselves. */
 		k_next->prev = k_prev;
 		k_prev->next = k_next;
 
@@ -611,7 +611,7 @@ static void knot_refit_error_recalculate(
 	{
 		double handles[2];
 
-		/* First check if we can remove, this allows to refit and remove as we go. */
+		/* First check if we can remove, this allows us to refit and remove as we go. */
 		const double cost_sq = knot_calc_curve_error_value_and_index(
 		        p->pd, k->prev, k->next,
 		        k->prev->tan[1], k->next->tan[0],
@@ -711,7 +711,7 @@ static void knot_refit_error_recalculate(
 
 			assert(cost_sq_dst_max < cost_sq_src_max);
 
-			/* Weight for the greatest improvement */
+			/* Weight for the greatest improvement. */
 			HEAP_insert_or_update(p->heap, &k->heap_node, cost_sq_src_max - cost_sq_dst_max, r);
 		}
 	}
@@ -735,7 +735,7 @@ remove:
 
 /**
  * Re-adjust the curves by re-fitting points.
- * test the error from moving using points between the adjacent.
+ * Test the error from moving using points between the adjacent knots.
  */
 static uint curve_incremental_simplify_refit(
         const struct PointData *pd,
@@ -821,7 +821,7 @@ static uint curve_incremental_simplify_refit(
 		else
 #endif
 		{
-			/* Remove ourselves */
+			/* Remove ourselves. */
 			k_next->prev = k_refit;
 			k_prev->next = k_refit;
 
@@ -904,7 +904,7 @@ static void knot_corner_error_recalculate(
 		c->index_adjacent[0] = k_prev->index;
 		c->index_adjacent[1] = k_next->index;
 
-		/* Need to store handle lengths for both sides */
+		/* Need to store handle lengths for both sides. */
 		c->handles_prev[0] = handles_prev[0];
 		c->handles_prev[1] = handles_prev[1];
 
@@ -983,13 +983,13 @@ static uint curve_incremental_simplify_corners(
 			struct Knot *k_prev = &knots[i];
 			struct Knot *k_next = k_prev->next;
 
-			/* Angle outside threshold */
+			/* Angle outside threshold. */
 			if (dot_vnvn(k_prev->tan[0], k_next->tan[1], dims) < corner_angle_cos) {
 				/* Measure distance projected onto a plane,
 				 * since the points may be offset along their own tangents. */
 				sub_vn_vnvn(plane_no, k_next->tan[0], k_prev->tan[1], dims);
 
-				/* Compare 2x so as to allow both to be changed by maximum of error_sq_max */
+				/* Compare 2x so as to allow both to be changed by maximum of error_sq_max. */
 				const uint split_index = knot_find_split_point_on_axis(
 				        pd, k_prev, k_next,
 				        knots_len,
@@ -1030,22 +1030,22 @@ static uint curve_incremental_simplify_corners(
 
 		struct Knot *k_split = &knots[c->index];
 
-		/* Remove while collapsing */
+		/* Remove while collapsing. */
 		struct Knot *k_prev  = &knots[c->index_adjacent[0]];
 		struct Knot *k_next  = &knots[c->index_adjacent[1]];
 
-		/* Insert */
+		/* Insert. */
 		k_split->is_removed = false;
 		k_split->prev = k_prev;
 		k_split->next = k_next;
 		k_prev->next = k_split;
 		k_next->prev = k_split;
 
-		/* Update tangents */
+		/* Update tangents. */
 		k_split->tan[0] = k_prev->tan[1];
 		k_split->tan[1] = k_next->tan[0];
 
-		/* Own handles */
+		/* Own handles. */
 		k_prev->handles[1]  = c->handles_prev[0];
 		k_split->handles[0] = c->handles_prev[1];
 		k_split->handles[1] = c->handles_next[0];
@@ -1112,7 +1112,7 @@ int curve_fit_cubic_to_points_refit_db(
 #endif
 
 	/* Over alloc the list x2 for cyclic curves,
-	 * so we can evaluate across the start/end */
+	 * so we can evaluate across the start/end. */
 	double *points_alloc = NULL;
 	if (is_cyclic) {
 		points_alloc = malloc((sizeof(double) * points_len * dims) * 2);
@@ -1149,7 +1149,7 @@ int curve_fit_cubic_to_points_refit_db(
 		knots[0].prev = NULL;
 		knots[knots_len - 1].next = NULL;
 
-		/* always keep end-points */
+		/* Always keep end-points. */
 		knots[0].can_remove = false;
 		knots[knots_len - 1].can_remove = false;
 	}
@@ -1194,7 +1194,7 @@ int curve_fit_cubic_to_points_refit_db(
 		double len_prev, len_next;
 
 #if 0
-		/* 2x normalize calculations, but correct */
+		/* 2x normalize calculations, but correct. */
 
 		for (uint i = 0; i < knots_len; i++) {
 			Knot *k = &knots[i];
@@ -1228,7 +1228,7 @@ int curve_fit_cubic_to_points_refit_db(
 		}
 #else
 		if (knots_len < 2) {
-			/* NOP, set dummy values */
+			/* NOP, set dummy values. */
 			for (uint i = 0; i < knots_len; i++) {
 				struct Knot *k = &knots[i];
 				zero_vn(k->tan[0], dims);
@@ -1331,7 +1331,7 @@ int curve_fit_cubic_to_points_refit_db(
 
 	uint knots_len_remaining = knots_len;
 
-	/* 'curve_incremental_simplify_refit' can be called here, but its very slow
+	/* 'curve_incremental_simplify_refit' can be called here, but it's very slow,
 	 * just remove all within the threshold first. */
 	knots_len_remaining = curve_incremental_simplify(
 	        &pd, knots, knots_len, knots_len_remaining,
@@ -1431,7 +1431,7 @@ int curve_fit_cubic_to_points_refit_db(
 		}
 	}
 
-	/* Correct unused handle endpoints - not essential, but nice behavior */
+	/* Correct unused handle endpoints - not essential, but nice behavior. */
 	if (is_cyclic == false) {
 		struct Knot *knots_last = knots_first;
 		while (knots_last->next) {
@@ -1441,7 +1441,7 @@ int curve_fit_cubic_to_points_refit_db(
 		knots_last->handles[1]  = -knots_last->handles[0];
 	}
 
-	/* 3x for one knot and two handles */
+	/* 3x for one knot and two handles. */
 	double *cubic_array = malloc(sizeof(double) * knots_len_remaining * 3 * dims);
 
 	{

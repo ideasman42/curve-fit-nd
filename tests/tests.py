@@ -51,14 +51,14 @@ def interp_cubic_vn(v0, v1, v2, v3, u):
 
 # ----------------------------------------------------------------------------
 
-# refine error calculation
+# Refine error calculation.
 USE_REFINE = True
 REFINE_STEPS = 6
 REFINE_SHRINK = 0.5
 
 import unittest
 
-# module from ../c_python_ext
+# Module from ../c_python_ext.
 import curve_fit_nd
 
 TEST_DATA_PATH = os.path.join(os.path.dirname(__file__), "data")
@@ -81,7 +81,7 @@ def iter_pairs(iterable):
 
 
 def export_svg(name, s, points, measure_points):
-    # write svg's to tests dir for now
+    # Write SVGs to tests dir for now.
     dirname = os.path.join(TEST_DATA_PATH, "..", "data_svg")
     os.makedirs(dirname, exist_ok=True)
     fp = os.path.join(dirname, name + ".svg")
@@ -130,7 +130,7 @@ def export_svg(name, s, points, measure_points):
             fw('</g>\n')
 
         if s:
-            # tangent handles
+            # Tangent handles.
             fw('<g fill="white" fill-opacity="0.5" stroke="white" stroke-opacity="0.5" stroke-width="1">\n')
             for i, p in s:
                 for v in p:
@@ -146,7 +146,7 @@ def export_svg(name, s, points, measure_points):
             fw('</g>\n')
 
 
-            # lines
+            # Lines.
             fw('<g stroke="white" stroke-opacity="0.2" stroke-width="1">\n')
             for i, (v0, v1, v2) in s:
                 fw('<line x1="%.4f" y1="%.4f" x2="%.4f" y2="%.4f" />\n' %
@@ -198,7 +198,7 @@ def curve_error_max(points, curve, r_measure_points):
             p_real = points[s]
             p_curve = interp_cubic_vn(k0, h0, h1, k1, u)
 
-            # step up and down the cubic to reach a close point
+            # Step up and down the cubic to reach a close point.
             if do_refine:
                 error_best = len_squared_vnvn(p_real, p_curve)
 
@@ -215,7 +215,7 @@ def curve_error_max(points, curve, r_measure_points):
 
                 u_step /= u_tot
 
-                # refine, start at half
+                # Refine, start at half.
                 u_step *= REFINE_SHRINK
 
                 u_best = u
@@ -238,11 +238,11 @@ def curve_error_max(points, curve, r_measure_points):
                         if refine_count == REFINE_STEPS:
                             break
                         else:
-                            # refine further
+                            # Refine further.
                             u_step *= REFINE_SHRINK
                 error_max_sq = max(error_max_sq, error_best)
                 p_curve = p_best
-                # end USE_REFINE
+                # End USE_REFINE.
 
             else:
                 error_max_sq = max(error_max_sq, len_squared_vnvn(p_real, p_curve))
@@ -272,7 +272,7 @@ class TestDataFile_Helper:
         if USE_SVG:
             export_svg(name, curve, points, measure_points)
 
-        # scale the error up to allow for some minor discrepancy in USE_REFINE
+        # Scale the error up to allow for some minor discrepancy in USE_REFINE.
         self.assertLess(error_test, error * 1.01)
 
 
