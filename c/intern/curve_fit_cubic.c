@@ -1190,7 +1190,7 @@ static void fit_cubic_to_points_recursive(
 	        points_length_cache,
 #endif
 	        tan_l, tan_r,
-	        (calc_flag & CURVE_FIT_CALC_HIGH_QUALIY) ? DBL_EPSILON : error_threshold_sq,
+	        (calc_flag & CURVE_FIT_CALC_HIGH_QUALITY) ? DBL_EPSILON : error_threshold_sq,
 	        dims,
 	        cubic, &error_max_sq, &split_index) ||
 	    (error_max_sq < error_threshold_sq))
