@@ -104,6 +104,20 @@ typedef unsigned int uint;
 #  define UNLIKELY(x)     (x)
 #endif
 
+/**
+ * Advance knot pointer to next knot in array, wrapping at end.
+ * Assumes `knot->index` reflects array position and array is contiguous.
+ */
+#define KNOT_STEP_NEXT_WRAP(k_step, knots_end) \
+	{ \
+		if ((k_step)->index != (knots_end)) { \
+			(k_step) += 1; \
+		} \
+		else { \
+			(k_step) -= (knots_end); \
+		} \
+	} ((void)0)
+
 struct PointData {
 	const double *points;
 	uint          points_len;
@@ -243,13 +257,7 @@ static uint knot_find_split_point(
 	const uint knots_end = knots_len - 1;
 	const struct Knot *k_step = knot_l;
 	do {
-		if (k_step->index != knots_end) {
-			k_step += 1;
-		}
-		else {
-			/* Wrap around. */
-			k_step = k_step - knots_end;
-		}
+		KNOT_STEP_NEXT_WRAP(k_step, knots_end);
 
 		if (k_step != knot_r) {
 			sub_vn_vnvn(v_offset, &pd->points[k_step->index * dims], offset, dims);
@@ -290,13 +298,7 @@ static uint knot_find_split_point_on_axis(
 	const uint knots_end = knots_len - 1;
 	const struct Knot *k_step = knot_l;
 	do {
-		if (k_step->index != knots_end) {
-			k_step += 1;
-		}
-		else {
-			/* Wrap around. */
-			k_step = k_step - knots_end;
-		}
+		KNOT_STEP_NEXT_WRAP(k_step, knots_end);
 
 		if (k_step != knot_r) {
 			double split_point_dist_test = dot_vnvn(plane_no, &pd->points[k_step->index * dims], dims);
