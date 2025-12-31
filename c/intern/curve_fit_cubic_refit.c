@@ -221,6 +221,16 @@ struct KnotCornerState {
 
 /* Utility functions. */
 
+/**
+ * Number of points from `index_l` to `index_r` inclusive, handling cyclic wrap.
+ */
+static uint knot_span_length(const uint index_l, const uint index_r, const uint points_len)
+{
+	return ((index_l <= index_r) ?
+	        (index_r - index_l) :
+	        ((index_r + points_len) - index_l)) + 1;
+}
+
 #if defined(USE_KNOT_REFIT) && !defined(USE_KNOT_REFIT_REMOVE)
 /**
  * Find the most distant point between the 2 knots.
@@ -360,9 +370,7 @@ static double knot_calc_curve_error_value(
         const uint dims,
         double r_handle_factors[2])
 {
-	const uint points_offset_len = ((knot_l->index < knot_r->index) ?
-	        (knot_r->index - knot_l->index) :
-	        ((knot_r->index + pd->points_len) - knot_l->index)) + 1;
+	const uint points_offset_len = knot_span_length(knot_l->index, knot_r->index, pd->points_len);
 
 	if (points_offset_len != 2) {
 		uint error_index_dummy;
@@ -401,9 +409,7 @@ static double knot_calc_curve_error_value_and_index(
         double r_handle_factors[2],
         uint *r_error_index)
 {
-	const uint points_offset_len = ((knot_l->index < knot_r->index) ?
-	        (knot_r->index - knot_l->index) :
-	        ((knot_r->index + pd->points_len) - knot_l->index)) + 1;
+	const uint points_offset_len = knot_span_length(knot_l->index, knot_r->index, pd->points_len);
 
 	if (points_offset_len != 2) {
 		const double error_sq = knot_remove_error_value(
