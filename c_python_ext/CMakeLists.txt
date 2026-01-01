@@ -1,3 +1,6 @@
+cmake_minimum_required(VERSION 3.5)
+
+project(curve_fit_nd_ext C)
 
 # avoid having empty buildtype
 set(CMAKE_BUILD_TYPE_INIT Release)
@@ -8,11 +11,6 @@ set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS
 	$<$<CONFIG:MinSizeRel>:NDEBUG>
 	$<$<CONFIG:RelWithDebInfo>:NDEBUG>
 )
-
-cmake_policy(SET CMP0003 NEW)
-cmake_policy(SET CMP0005 NEW)
-
-cmake_minimum_required(VERSION 2.8)
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin CACHE INTERNAL "" FORCE )
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib CACHE INTERNAL "" FORCE )
