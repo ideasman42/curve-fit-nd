@@ -251,7 +251,14 @@ def test_data_load(name: str) -> Sequence[tuple[float, float]]:
 
 class TestDataFile_MixIn:
 
-    def assertTestData(self, name: str, error: float, corner_angle: float | None = None, is_cyclic: bool = False):
+    def assertTestData(
+        self,
+        name: str,
+        error: float,
+        corner_angle: float | None = None,
+        is_cyclic: bool = False,
+        expected_knot_count: int = 0,
+    ):
         points = test_data_load(name)
 
         curve = curve_fit(points, error, corner_angle, is_cyclic)
@@ -262,6 +269,7 @@ class TestDataFile_MixIn:
             export_svg(name, curve, points, measure_points)
 
         self.assertLess(error_test, error * ERROR_TOLERANCE_SCALE)
+        self.assertEqual(len(curve), expected_knot_count)
 
 
 class TestData(NamedTuple):
@@ -270,6 +278,7 @@ class TestData(NamedTuple):
     error_max: float
     corner_angle: float | None
     is_cyclic: bool
+    expected_knot_count: int
 
 
 test_data = (
@@ -278,24 +287,28 @@ test_data = (
         error_max=0.01,
         corner_angle=None,
         is_cyclic=False,
+        expected_knot_count=28,
     ),
     TestData(
         filename="test_curve_freehand_02",
         error_max=0.01,
         corner_angle=None,
         is_cyclic=False,
+        expected_knot_count=30,
     ),
     TestData(
         filename="test_curve_freehand_03",
         error_max=0.01,
         corner_angle=math.radians(30),
         is_cyclic=False,
+        expected_knot_count=20,
     ),
     TestData(
         filename="test_curve_freehand_04_cyclic",
         error_max=0.0075,
         corner_angle=math.radians(70),
         is_cyclic=True,
+        expected_knot_count=28,
     ),
 )
 
@@ -311,6 +324,7 @@ def _make_test_from_data(test_data: TestData):
             test_data.error_max,
             test_data.corner_angle,
             test_data.is_cyclic,
+            test_data.expected_knot_count,
         )
     return test_method
 
