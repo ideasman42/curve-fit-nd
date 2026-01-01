@@ -1,0 +1,6 @@
+# Build artifacts.
+c_python_ext/build/
+
+# Python cache.
+__pycache__/
+*.pyc
