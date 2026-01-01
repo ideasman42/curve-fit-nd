@@ -253,6 +253,7 @@ class TestDataFile_MixIn:
 
     def assertTestData(
         self,
+        *,
         name: str,
         error: float,
         corner_angle: float | None = None,
@@ -320,11 +321,11 @@ class FreehandTest(unittest.TestCase, TestDataFile_MixIn):
 def _make_test_from_data(test_data: TestData):
     def test_method(self):
         self.assertTestData(
-            test_data.filename,
-            test_data.error_max,
-            test_data.corner_angle,
-            test_data.is_cyclic,
-            test_data.expected_knot_count,
+            name=test_data.filename,
+            error=test_data.error_max,
+            corner_angle=test_data.corner_angle,
+            is_cyclic=test_data.is_cyclic,
+            expected_knot_count=test_data.expected_knot_count,
         )
     return test_method
 
