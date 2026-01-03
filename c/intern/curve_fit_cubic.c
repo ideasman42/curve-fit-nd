@@ -318,12 +318,18 @@ static void cubic_calc_acceleration(
 /**
  * Returns a 'measure' of the maximum distance (squared) of the points specified
  * by points_offset from the corresponding cubic(u[]) points.
+ *
+ * \param early_exit_threshold: When the error exceeds this value, exit early and use the
+ * current maximum as the split point. Use DBL_MAX to disable early exit and find the
+ * true maximum. Early exit is useful when we only need to know if the curve exceeds
+ * a threshold, since any point above the threshold is a valid split candidate.
  */
 static double cubic_calc_error(
         const Cubic *cubic,
         const double *points_offset,
         const uint points_offset_len,
         const double *u,
+        const double early_exit_threshold,
         const uint dims,
 
         uint *r_error_index)
@@ -345,6 +351,12 @@ static double cubic_calc_error(
 		if (err_sq >= error_max_sq) {
 			error_max_sq = err_sq;
 			error_index = i;
+
+			/* Early exit: once we exceed threshold, this point is a valid split candidate. */
+			if (error_max_sq >= early_exit_threshold) {
+				*r_error_index = error_index;
+				return error_max_sq;
+			}
 		}
 	}
 
@@ -1059,7 +1071,8 @@ static bool fit_cubic_to_points(
 
 	/* Find max deviation of points to fitted curve. */
 	error_max_sq = cubic_calc_error(
-	        r_cubic, points_offset, points_offset_len, u, dims,
+	        r_cubic, points_offset, points_offset_len, u,
+	        DBL_MAX, dims,
 	        &split_index);
 
 	Cubic *cubic_test = alloca(cubic_alloc_size(dims));
@@ -1076,7 +1089,8 @@ static bool fit_cubic_to_points(
 		        points_offset, points_offset_len,
 		        tan_l, tan_r, dims, cubic_test);
 		const double error_max_sq_test = cubic_calc_error(
-		        cubic_test, points_offset, points_offset_len, u, dims,
+		        cubic_test, points_offset, points_offset_len, u,
+		        DBL_MAX, dims,
 		        &split_index);
 
 		/* Intentionally use the newly calculated 'split_index',
@@ -1128,8 +1142,11 @@ static bool fit_cubic_to_points(
 #endif
 			        u_prime, tan_l, tan_r, dims, cubic_test);
 
+			/* Early exit is safe here: if error exceeds current best,
+			 * we reject this curve anyway and split_index won't be used. */
 			const double error_max_sq_test = cubic_calc_error(
-			        cubic_test, points_offset, points_offset_len, u_prime, dims,
+			        cubic_test, points_offset, points_offset_len, u_prime,
+			        error_max_sq, dims,
 			        &split_index);
 
 			if (error_max_sq > error_max_sq_test) {
