@@ -1083,7 +1083,7 @@ static uint curve_incremental_simplify_corners(
 
 	HEAP_free(heap, free);
 
-	*r_corner_index_len = corner_index_len;
+	*r_corner_index_len += corner_index_len;
 
 	return knots_len_remaining;
 }
@@ -1183,6 +1183,9 @@ int curve_fit_cubic_to_points_refit_db(
 		}
 
 		*r_corner_index_len = corners_len;
+	}
+	else {
+		*r_corner_index_len = 0;
 	}
 
 #ifdef USE_LENGTH_CACHE
