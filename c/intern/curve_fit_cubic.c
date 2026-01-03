@@ -298,7 +298,7 @@ static void cubic_calc_speed(
 	const double s = 1.0 - t;
 	for (uint j = 0; j < dims; j++) {
 		r_v[j] =  3.0 * ((p1[j] - p0[j]) * s * s + 2.0 *
-		                 (p2[j] - p0[j]) * s * t +
+		                 (p2[j] - p1[j]) * s * t +
 		                 (p3[j] - p2[j]) * t * t);
 	}
 }
