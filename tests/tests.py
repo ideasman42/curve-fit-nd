@@ -3,6 +3,7 @@ Example of watching a single test:
   watch -n2 "USE_SVG=1 nice -n 20 python -m unittest tests.CurveFitTest.test_curve_01"
 """
 
+import glob
 import math
 import os
 import sys
@@ -93,6 +94,11 @@ DEFAULT_CORNER_ANGLE = math.radians(10)
 TEST_DATA_PATH = os.path.join(os.path.dirname(__file__), "data")
 
 USE_SVG = os.environ.get("USE_SVG")
+if USE_SVG:
+    svg_dir = os.path.join(TEST_DATA_PATH, "..", "data_svg")
+    if os.path.isdir(svg_dir):
+        for svg_file in glob.glob(os.path.join(svg_dir, "*.svg")):
+            os.remove(svg_file)
 
 sys.path.append(TEST_DATA_PATH)
 
