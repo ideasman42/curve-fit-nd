@@ -467,6 +467,40 @@ def test_data_load(name: str) -> Sequence[float2]:
     return data
 
 
+def curve_knots_sorted(
+        curve: Sequence[tuple[int, tuple[floatN, floatN, floatN]]],
+) -> list[tuple[floatN, floatN, floatN]]:
+    """
+    Extract and rotate curve knots for order-independent comparison.
+
+    Finds the minimum knot by position (co) and rotates the list
+    so it comes first, preserving the original order of elements.
+    """
+    knots = [v for _i, v in curve]
+    if not knots:
+        return knots
+    # Find the index of the minimum knot, ordering by (co, handle_left, handle_right).
+    # The knot position (co) is ordered first since it's the most stable identifier,
+    # handles depend on neighboring points and may vary with rotation.
+    # A stable identifier makes troubleshooting differences between arrays
+    # easier since values are more likely to be aligned (though not guaranteed).
+    min_index = min(range(len(knots)), key=lambda i: (knots[i][1], knots[i][0], knots[i][2]))
+    # Rotate so the minimum is first.
+    return knots[min_index:] + knots[:min_index]
+
+
+def wrap_points_at_middle(points: Sequence[float2]) -> list[float2]:
+    """
+    Rotate points by half their length.
+
+    For a cyclic curve, this should produce an equivalent curve
+    when fitted, proving order-independence.
+    """
+    n = len(points)
+    mid = n // 2
+    return list(points[mid:]) + list(points[:mid])
+
+
 class TestDataFile_MixIn:
 
     def assertTestData(  # type: ignore[misc]
@@ -492,6 +526,41 @@ class TestDataFile_MixIn:
         self.assertLess(error_test, error * ERROR_TOLERANCE_SCALE)
         self.assertEqual(len(curve), expected_knot_count)
         self.assertAlmostEqual(area_delta, expected_area_delta, delta=AREA_DELTA_TOLERANCE)
+
+        if is_cyclic:
+            self.assertCyclicOrderIndependence(points, curve, error, corner_angle)
+
+    def assertCyclicOrderIndependence(  # type: ignore[misc]
+        self: "CurveFitTest",
+        points: Sequence[float2],
+        curve: Sequence[tuple[int, tuple[float2, float2, float2]]],
+        error: float,
+        corner_angle: float | None,
+    ) -> None:
+        """Verify order-independence by wrapping points at middle and comparing."""
+        points_wrapped = wrap_points_at_middle(points)
+        curve_wrapped = curve_fit(points_wrapped, error, corner_angle, is_cyclic=True)
+
+        # Both should produce the same number of knots.
+        self.assertEqual(len(curve_wrapped), len(curve))
+
+        # Sort both curves by knot position and compare.
+        knots_orig = curve_knots_sorted(curve)
+        knots_wrapped = curve_knots_sorted(curve_wrapped)
+
+        for i, (orig, wrapped) in enumerate(zip(knots_orig, knots_wrapped)):
+            # Compare handle_left, co, handle_right.
+            for j, (v_orig, v_wrapped) in enumerate(zip(orig, wrapped)):
+                self.assertAlmostEqual(
+                    v_orig[0], v_wrapped[0],
+                    places=9,
+                    msg=f"Knot {i} element {j} x mismatch",
+                )
+                self.assertAlmostEqual(
+                    v_orig[1], v_wrapped[1],
+                    places=9,
+                    msg=f"Knot {i} element {j} y mismatch",
+                )
 
 
 class TestData(NamedTuple):
