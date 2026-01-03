@@ -63,6 +63,15 @@
  */
 #define USE_ORIG_INDEX_DATA
 
+/**
+ * Enable optimized code paths that sacrifice readability for speed.
+ * When defined, certain hot loops use combined calculations to reduce
+ * redundant operations (e.g., computing shared intermediate values once
+ * instead of multiple times). The optimized code produces identical results
+ * but is harder to follow. Disable this for debugging or code review.
+ */
+#define USE_FAST_PATH
+
 typedef unsigned int uint;
 
 #include "curve_fit_inline.h"
@@ -315,6 +324,45 @@ static void cubic_calc_acceleration(
 	}
 }
 
+#ifdef USE_FAST_PATH
+/**
+ * Compute point, first derivative (speed), and second derivative (acceleration) in one pass.
+ * Combines cubic_calc_point, cubic_calc_speed, and cubic_calc_acceleration to share
+ * intermediate values and reduce redundant control point access.
+ */
+static void cubic_calc_point_speed_accel(
+        const Cubic *cubic, const double t, const uint dims,
+        double r_point[], double r_speed[], double r_accel[])
+{
+	CUBIC_VARS_CONST(cubic, dims, p0, p1, p2, p3);
+	const double s = 1.0 - t;
+	const double ss = s * s;
+	const double tt = t * t;
+	const double st2 = 2.0 * s * t;
+
+	for (uint j = 0; j < dims; j++) {
+		/* Control point differences, computed once. */
+		const double d01 = p1[j] - p0[j];
+		const double d12 = p2[j] - p1[j];
+		const double d23 = p3[j] - p2[j];
+
+		/* Point via de Casteljau's algorithm. */
+		const double p01 = p0[j] + d01 * t;
+		const double p12 = p1[j] + d12 * t;
+		const double p23 = p2[j] + d23 * t;
+		const double p012 = p01 * s + p12 * t;
+		const double p123 = p12 * s + p23 * t;
+		r_point[j] = p012 * s + p123 * t;
+
+		/* First derivative: 3 * ((d01)*s^2 + 2*(d12)*s*t + (d23)*t^2). */
+		r_speed[j] = 3.0 * (d01 * ss + d12 * st2 + d23 * tt);
+
+		/* Second derivative: 6 * ((d12 - d01)*s + (d23 - d12)*t). */
+		r_accel[j] = 6.0 * ((d12 - d01) * s + (d23 - d12) * t);
+	}
+}
+#endif  /* USE_FAST_PATH */
+
 /**
  * Returns a 'measure' of the maximum distance (squared) of the points specified
  * by points_offset from the corresponding cubic(u[]) points.
@@ -427,6 +475,28 @@ static double B2plusB3(double u)
 {
     return u * u * (3.0 - 2.0 * u);
 }
+
+#ifdef USE_FAST_PATH
+/**
+ * Compute all four Bernstein polynomial values with shared intermediate calculations.
+ * This avoids redundant computation of (1-u), u^2, etc. when all four values are needed.
+ */
+static void bernstein_all(
+        const double u,
+        double *r_b1, double *r_b2,
+        double *r_b0_plus_b1, double *r_b2_plus_b3)
+{
+	const double s = 1.0 - u;
+	const double ss = s * s;
+	const double uu = u * u;
+	const double us3 = 3.0 * u * s;
+
+	*r_b1 = us3 * s;                    /* 3 * u * (1-u)^2 */
+	*r_b2 = us3 * u;                    /* 3 * u^2 * (1-u) */
+	*r_b0_plus_b1 = ss * (1.0 + 2.0 * u);
+	*r_b2_plus_b3 = uu * (3.0 - 2.0 * u);
+}
+#endif  /* USE_FAST_PATH */
 
 static void points_calc_center_weighted(
         const double *points_offset,
@@ -726,11 +796,18 @@ static void cubic_from_points(
 		const double *pt = points_offset;
 
 		for (uint i = 0; i < points_offset_len; i++, pt += dims) {
+#ifdef USE_FAST_PATH
+			double b1, b2, b0_plus_b1, b2_plus_b3;
+			bernstein_all(u_prime[i], &b1, &b2, &b0_plus_b1, &b2_plus_b3);
+			mul_vnvn_fl(a[0], tan_l, b1, dims);
+			mul_vnvn_fl(a[1], tan_r, b2, dims);
+#else
 			mul_vnvn_fl(a[0], tan_l, B1(u_prime[i]), dims);
 			mul_vnvn_fl(a[1], tan_r, B2(u_prime[i]), dims);
 
 			const double b0_plus_b1 = B0plusB1(u_prime[i]);
 			const double b2_plus_b3 = B2plusB3(u_prime[i]);
+#endif
 
 			/* Inline dot product. */
 			for (uint j = 0; j < dims; j++) {
@@ -958,9 +1035,13 @@ static double cubic_find_root(
 	double *q2_u = alloca(sizeof(double) * dims);
 #endif
 
+#ifdef USE_FAST_PATH
+	cubic_calc_point_speed_accel(cubic, u, dims, q0_u, q1_u, q2_u);
+#else
 	cubic_calc_point(cubic, u, dims, q0_u);
 	cubic_calc_speed(cubic, u, dims, q1_u);
 	cubic_calc_acceleration(cubic, u, dims, q2_u);
+#endif
 
 	/* May divide-by-zero, caller must check for that case. */
 	/* `u - ((q0_u - p) * q1_u) / (q1_u.length_squared() + (q0_u - p) * q2_u)` */
