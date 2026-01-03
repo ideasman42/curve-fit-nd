@@ -171,7 +171,12 @@ DEFAULT_CORNER_ANGLE = math.radians(10)
 
 TEST_DATA_PATH = os.path.join(os.path.dirname(__file__), "data")
 
-USE_SVG = os.environ.get("USE_SVG")
+USE_SVG = os.environ.get("USE_SVG") or False
+USE_STRESS_TEST = os.environ.get("USE_STRESS_TEST") or False
+
+# Number of subdivision iterations for stress testing.
+STRESS_TEST_SUBDIV_ITERATIONS = 5
+
 if USE_SVG:
     svg_dir = os.path.join(TEST_DATA_PATH, "..", "data_svg")
     if os.path.isdir(svg_dir):
@@ -599,6 +604,12 @@ class TestDataFile_MixIn:
     ) -> None:
         points = test_data_load(name)
 
+        if USE_STRESS_TEST:
+            points = cast(
+                Sequence[float2],
+                subdivide_points(points, STRESS_TEST_SUBDIV_ITERATIONS, is_cyclic),
+            )
+
         curve = curve_fit(points, error, corner_angle, is_cyclic)
 
         error_test, measure_points = curve_error_max(points, curve, is_cyclic)
@@ -608,8 +619,9 @@ class TestDataFile_MixIn:
             export_svg(name, curve, points, measure_points)
 
         self.assertLess(error_test, error * ERROR_TOLERANCE_SCALE)
-        self.assertEqual(len(curve), expected_knot_count)
-        self.assertAlmostEqual(area_delta, expected_area_delta, delta=AREA_DELTA_TOLERANCE)
+        if not USE_STRESS_TEST:
+            self.assertEqual(len(curve), expected_knot_count)
+            self.assertAlmostEqual(area_delta, expected_area_delta, delta=AREA_DELTA_TOLERANCE)
 
         if is_cyclic:
             self.assertCyclicOrderIndependence(points, curve, error, corner_angle)
