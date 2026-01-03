@@ -178,6 +178,7 @@ static bool point_corner_measure(
         double r_p_next[], uint *r_i_next_prev)
 {
 	const double *p = &points[i * dims];
+	const double radius_sq = sq(radius);
 	uint sample;
 
 
@@ -188,7 +189,7 @@ static bool point_corner_measure(
 		if ((i_prev == -1) || (sample++ > samples_max)) {
 			return false;
 		}
-		else if (len_squared_vnvn(p, &points[i_prev * dims], dims) < radius) {
+		else if (len_squared_vnvn(p, &points[i_prev * dims], dims) < radius_sq) {
 			i_prev -= 1;
 		}
 		else {
@@ -203,7 +204,7 @@ static bool point_corner_measure(
 		if ((i_next == points_len) || (sample++ > samples_max)) {
 			return false;
 		}
-		else if (len_squared_vnvn(p, &points[i_next * dims], dims) < radius) {
+		else if (len_squared_vnvn(p, &points[i_next * dims], dims) < radius_sq) {
 			i_next += 1;
 		}
 		else {
