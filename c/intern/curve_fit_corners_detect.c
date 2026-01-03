@@ -183,7 +183,6 @@ static bool point_corner_measure(
 
 
 	uint i_prev = i_prev_init;
-	uint i_prev_next = i_prev + 1;
 	sample = 0;
 	while (true) {
 		if ((i_prev == -1) || (sample++ > samples_max)) {
@@ -196,9 +195,9 @@ static bool point_corner_measure(
 			break;
 		}
 	}
+	uint i_prev_next = i_prev + 1;
 
 	uint i_next = i_next_init;
-	uint i_next_prev = i_next - 1;
 	sample = 0;
 	while (true) {
 		if ((i_next == points_len) || (sample++ > samples_max)) {
@@ -211,6 +210,7 @@ static bool point_corner_measure(
 			break;
 		}
 	}
+	uint i_next_prev = i_next - 1;
 
 	/* Find points on the sphere. */
 	if (!isect_line_sphere_vn(
