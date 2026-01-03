@@ -71,6 +71,84 @@ def interp_cubic_vn(
     return interp_vnvn(r0, r1, u)
 
 
+def reflect_vnvn(v0: floatN, v1: floatN) -> floatN:
+    """Reflect v0 across v1."""
+    return tuple(2.0 * b - a for a, b in zip(v0, v1))
+
+
+def interp_catmull_rom_midpoint_vnvnvnvn(
+        p0: floatN,
+        p1: floatN,
+        p2: floatN,
+        p3: floatN,
+) -> floatN:
+    """
+    Compute smooth midpoint between p1 and p2 using Catmull-Rom interpolation.
+
+    Uses the 4-point subdivision rule: (-p0 + 9*p1 + 9*p2 - p3) / 16.
+    """
+    return tuple((-a + 9.0 * b + 9.0 * c - d) / 16.0 for a, b, c, d in zip(p0, p1, p2, p3))
+
+
+def subdivide_points(
+        points: Sequence[floatN],
+        iterations: int = 1,
+        is_cyclic: bool = False,
+) -> list[floatN]:
+    """
+    Subdivide points by inserting smooth midpoints between each pair.
+
+    Uses 4-point Catmull-Rom subdivision for smooth curvature-following placement.
+    Original points are preserved at their exact positions.
+
+    :arg points: Input points (n-dimensional).
+    :arg iterations: Number of subdivision passes (each roughly doubles point count).
+    :arg is_cyclic: If True, also subdivide the segment from last to first point.
+    :return: Subdivided points with original points preserved.
+    """
+    result: list[floatN] = list(points)
+
+    for _ in range(iterations):
+        n = len(result)
+        if n < 2:
+            break
+
+        num_segments = n if is_cyclic else n - 1
+        # Pre-allocate: each segment adds 1 midpoint, plus original points.
+        # Cyclic: n original + n midpoints = 2n.
+        # Non-cyclic: n original + (n-1) midpoints = 2n - 1.
+        new_len = 2 * n if is_cyclic else 2 * n - 1
+        new_points: list[floatN] = [None] * new_len  # type: ignore[list-item]
+
+        for i in range(num_segments):
+            # Place original point at even index.
+            new_points[i * 2] = result[i]
+
+            # Get 4 points for interpolation.
+            if is_cyclic:
+                p0 = result[(i - 1) % n]
+                p1 = result[i]
+                p2 = result[(i + 1) % n]
+                p3 = result[(i + 2) % n]
+            else:
+                p1 = result[i]
+                p2 = result[i + 1]
+                # Reflect for boundary cases.
+                p0 = result[i - 1] if i > 0 else reflect_vnvn(p2, p1)
+                p3 = result[i + 2] if i + 2 < n else reflect_vnvn(p1, p2)
+
+            # Place midpoint at odd index.
+            new_points[i * 2 + 1] = interp_catmull_rom_midpoint_vnvnvnvn(p0, p1, p2, p3)
+
+        # Add final point for non-cyclic.
+        if not is_cyclic:
+            new_points[-1] = result[-1]
+
+        result = new_points
+
+    return result
+
+
 # ----------------------------------------------------------------------------
 # Constants
 
