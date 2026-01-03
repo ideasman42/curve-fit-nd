@@ -1334,6 +1334,7 @@ int curve_fit_cubic_to_points_db(
 					free(points_length_cache);
 				}
 				points_length_cache = malloc(sizeof(double) * points_offset_len);
+				points_length_cache_len_alloc = points_offset_len;
 			}
 			points_calc_coord_length_cache(
 			        &points[first_point * dims], points_offset_len, dims,
