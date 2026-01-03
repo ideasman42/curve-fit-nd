@@ -5,6 +5,11 @@
 
 #include <stdbool.h>
 
+#ifdef DEBUG_TIME
+#  include <stdio.h>
+#  include <time.h>
+#endif
+
 #include <Python.h>
 
 
@@ -145,6 +150,11 @@ static PyObject *M_Curve_fit_nd_curve_from_points(PyObject *self, PyObject *args
 	unsigned int corner_indices_len = 0;
 	unsigned int *corner_indices = NULL;
 
+#ifdef DEBUG_TIME
+	struct timespec time_start, time_end;
+	clock_gettime(CLOCK_MONOTONIC, &time_start);
+#endif
+
 #if 0
 	if (curve_fit_cubic_to_points_db(
 	        points_data, points_len, dims, error_threshold, 0,
@@ -168,6 +178,13 @@ static PyObject *M_Curve_fit_nd_curve_from_points(PyObject *self, PyObject *args
 		PyMem_Free(points_data);
 		return NULL;
 	}
+
+#ifdef DEBUG_TIME
+	clock_gettime(CLOCK_MONOTONIC, &time_end);
+	double time_elapsed = (time_end.tv_sec - time_start.tv_sec) +
+	                      (time_end.tv_nsec - time_start.tv_nsec) / 1e9;
+	fprintf(stderr, "curve_fit_cubic_to_points_refit_db: %.6f seconds\n", time_elapsed);
+#endif
 
 	PyMem_Free(points_data);
 

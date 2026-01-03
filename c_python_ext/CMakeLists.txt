@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.5)
 
 project(curve_fit_nd_ext C)
 
+option(WITH_DEBUG_TIME "Print timing information for curve fitting" OFF)
+
 # avoid having empty buildtype
 set(CMAKE_BUILD_TYPE_INIT Release)
 
@@ -11,6 +13,10 @@ set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS
 	$<$<CONFIG:MinSizeRel>:NDEBUG>
 	$<$<CONFIG:RelWithDebInfo>:NDEBUG>
 )
+
+if(WITH_DEBUG_TIME)
+	add_definitions(-DDEBUG_TIME)
+endif()
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin CACHE INTERNAL "" FORCE )
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib CACHE INTERNAL "" FORCE )
