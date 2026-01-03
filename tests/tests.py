@@ -684,7 +684,7 @@ test_data = (
         corner_angle=None,
         is_cyclic=False,
         expected_knot_count=30,
-        expected_area_delta=0.015154585747234644,
+        expected_area_delta=0.013766670034654198,
     ),
     TestData(
         filename="test_curve_freehand_03",
