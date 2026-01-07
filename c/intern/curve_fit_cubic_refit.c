@@ -84,6 +84,8 @@ typedef unsigned int uint;
 #define USE_KNOT_REFIT
 /* Remove knots under the error threshold while re-fitting. */
 #define USE_KNOT_REFIT_REMOVE
+/* Refine refit index by searching neighbors for lower error. */
+#define USE_KNOT_REFIT_REFINE
 /* Detect corners over an angle threshold. */
 #define USE_CORNER_DETECT
 /* Avoid re-calculating lengths multiple times. */
@@ -94,6 +96,7 @@ typedef unsigned int uint;
 
 #define SPLIT_POINT_INVALID ((uint)-1)
 
+#define MIN2(x, y) ((x) < (y) ? (x) : (y))
 #define MAX2(x, y) ((x) > (y) ? (x) : (y))
 
 #define SQUARE(a) ((a) * (a))
@@ -603,6 +606,64 @@ struct KnotRefit_Params {
 #endif
 };
 
+#ifdef USE_KNOT_REFIT_REFINE
+/**
+ * Refine the refit index by searching neighbors for lower error.
+ * Stops when no further improvement is found.
+ * \param dir: -1 to search toward `k_prev`, 1 to search toward `k_next`.
+ * \return The refined index, or `index_refit` if no improvement found.
+ */
+static uint knot_refit_index_refine(
+        const struct PointData *pd,
+        const struct Knot *knots,
+        const struct Knot *k_prev,
+        const struct Knot *k_next,
+        const uint index_refit,
+        const int dir,
+        double cost_sq_max,
+        const uint dims,
+        double r_handles_prev[2],
+        double r_handles_next[2],
+        double r_error_sq[2])
+{
+	/* Stop before reaching the adjacent knot. */
+	const uint index_end = (dir == -1) ? k_prev->index : k_next->index;
+	const uint points_len = pd->points_len;
+	uint i = index_refit;
+	uint result = index_refit;
+
+	/* Step through indices in direction `dir`, with wraparound. */
+	while ((i = (i + dir + points_len) % points_len) != index_end) {
+		const struct Knot *k_test = &knots[i];
+		double handles_prev_test[2], handles_next_test[2];
+		const double error_sq_prev = knot_calc_curve_error_value(
+		        pd, k_prev, k_test,
+		        k_prev->tan[1], k_test->tan[0],
+		        dims, handles_prev_test);
+		if (error_sq_prev >= cost_sq_max) {
+			break;
+		}
+		const double error_sq_next = knot_calc_curve_error_value(
+		        pd, k_test, k_next,
+		        k_test->tan[1], k_next->tan[0],
+		        dims, handles_next_test);
+		if (error_sq_next >= cost_sq_max) {
+			break;
+		}
+		/* Raise the bar: subsequent iterations must beat this. */
+		cost_sq_max = MAX2(error_sq_prev, error_sq_next);
+		result = i;
+		r_handles_prev[0] = handles_prev_test[0];
+		r_handles_prev[1] = handles_prev_test[1];
+		r_handles_next[0] = handles_next_test[0];
+		r_handles_next[1] = handles_next_test[1];
+		r_error_sq[0] = error_sq_prev;
+		r_error_sq[1] = error_sq_next;
+	}
+	return result;
+}
+#endif  /* USE_KNOT_REFIT_REFINE */
+
 static void knot_refit_error_recalculate(
         struct KnotRefit_Params *p,
         struct Knot *knots, const uint knots_len,
@@ -690,6 +751,66 @@ static void knot_refit_error_recalculate(
 	           dims,
 	           handles_next)) < cost_sq_src_max)))
 	{
+#ifdef USE_KNOT_REFIT_REFINE
+		/* Local refinement: search neighbors for a better refit index.
+		 * Search both directions independently to avoid bias.
+		 * Skip when error is zero (e.g. exactly straight lines). */
+		const double cost_sq_dst_max_init = MAX2(cost_sq_dst[0], cost_sq_dst[1]);
+		if (cost_sq_dst_max_init > 0.0) {
+			struct {
+				double handles_prev[2];
+				double handles_next[2];
+				double error_sq[2];
+				uint index_refit;
+				bool is_refined;
+			} scan[2];
+
+			/* `scan[0]`: toward `k_prev`, `scan[1]`: toward `k_next`. */
+			for (int i = 0; i < 2; i++) {
+				scan[i].index_refit = knot_refit_index_refine(
+				        p->pd, knots, k->prev, k->next, refit_index, (i == 0) ? -1 : 1,
+				        cost_sq_dst_max_init, dims,
+				        scan[i].handles_prev, scan[i].handles_next, scan[i].error_sq);
+				scan[i].is_refined = (scan[i].index_refit != refit_index);
+			}
+
+			/* Pick the best result from both directions. */
+			if (scan[0].is_refined || scan[1].is_refined) {
+				int side = 0;
+				if (scan[0].is_refined && scan[1].is_refined) {
+					/* Both directions found improvements, pick the best.
+					 * In the unlikely event of a tie, minimum error breaks it. */
+					const double cost_sq_max_0 = MAX2(scan[0].error_sq[0], scan[0].error_sq[1]);
+					const double cost_sq_max_1 = MAX2(scan[1].error_sq[0], scan[1].error_sq[1]);
+					if (cost_sq_max_0 < cost_sq_max_1) {
+						side = 0;
+					}
+					else if (cost_sq_max_1 < cost_sq_max_0) {
+						side = 1;
+					}
+					else {
+						const double cost_sq_min_0 = MIN2(scan[0].error_sq[0], scan[0].error_sq[1]);
+						const double cost_sq_min_1 = MIN2(scan[1].error_sq[0], scan[1].error_sq[1]);
+						side = (cost_sq_min_0 <= cost_sq_min_1) ? 0 : 1;
+					}
+				}
+				else {
+					side = scan[0].is_refined ? 0 : 1;
+				}
+
+				/* Use results from the winning direction. */
+				refit_index = scan[side].index_refit;
+				k_refit = &knots[refit_index];
+				handles_prev[0] = scan[side].handles_prev[0];
+				handles_prev[1] = scan[side].handles_prev[1];
+				handles_next[0] = scan[side].handles_next[0];
+				handles_next[1] = scan[side].handles_next[1];
+				cost_sq_dst[0] = scan[side].error_sq[0];
+				cost_sq_dst[1] = scan[side].error_sq[1];
+			}
+		}
+#endif  /* USE_KNOT_REFIT_REFINE */
+
 		{
 			struct KnotRefitState *r;
 			if (k->heap_node) {
