@@ -676,7 +676,7 @@ test_data = (
         corner_angle=None,
         is_cyclic=False,
         expected_knot_count=27,
-        expected_area_delta=0.014955688883270668,
+        expected_area_delta=0.014730895625564828,
     ),
     TestData(
         filename="test_curve_freehand_02",
@@ -684,7 +684,7 @@ test_data = (
         corner_angle=None,
         is_cyclic=False,
         expected_knot_count=30,
-        expected_area_delta=0.013766670034654198,
+        expected_area_delta=0.013817522468055975,
     ),
     TestData(
         filename="test_curve_freehand_03",
@@ -692,15 +692,15 @@ test_data = (
         corner_angle=math.radians(30),
         is_cyclic=False,
         expected_knot_count=20,
-        expected_area_delta=0.010086970061796336,
+        expected_area_delta=0.010025214489896801,
     ),
     TestData(
         filename="test_curve_freehand_04_cyclic",
         error_max=0.0075,
         corner_angle=math.radians(70),
         is_cyclic=True,
-        expected_knot_count=28,
-        expected_area_delta=0.010594265392120938,
+        expected_knot_count=26,
+        expected_area_delta=0.010536907960151748,
     ),
 )
 

@@ -910,6 +910,20 @@ static uint curve_incremental_simplify_refit(
 			k_old->prev->handles[1] = r->fit_params.handles_prev[0];
 			k_old->next->handles[0] = r->fit_params.handles_next[1];
 
+			/* Update error values for changed segments.
+			 *
+			 * Before:
+			 * - `k_prev - (error_sq_prev) -> k_refit - (error_sq_next) -> k_next`.
+			 * After:
+			 * - `k_prev->error_sq_next := error_sq_prev`.
+			 * - `k_refit->error_sq_next := error_sq_next`.
+			 * - `k_next->error_sq_next`: unchanged (segment beyond k_next unaffected).
+			 */
+			k_old->prev->error_sq_next = r->fit_params.error_sq_prev;
+			if (k_refit != NULL) {
+				k_refit->error_sq_next = r->fit_params.error_sq_next;
+			}
+
 #ifdef USE_TPOOL
 			refit_pool_elem_free(&epool, r);
 #else
