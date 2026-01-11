@@ -113,6 +113,17 @@ static PyObject *M_Curve_fit_nd_curve_from_points(PyObject *self, PyObject *args
 					Py_DECREF(item_fast);
 					return NULL;
 				}
+#ifdef WITH_RUST_PORT
+				else if (item_dims > RUST_DIMS_MAX) {
+					PyErr_Format(PyExc_ValueError,
+					             "point dimension %u exceeds maximum %u "
+					             "(rebuild with larger RUST_DIMS_MAX to increase)",
+					             item_dims, (unsigned int)RUST_DIMS_MAX);
+					Py_DECREF(points_fast);
+					Py_DECREF(item_fast);
+					return NULL;
+				}
+#endif
 				else {
 					dims = item_dims;
 					points_data = PyMem_Malloc((size_t)points_len * dims * sizeof(double));

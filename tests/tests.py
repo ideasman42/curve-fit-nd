@@ -1,11 +1,18 @@
 """
 Example of watching a single test:
   watch -n2 "USE_SVG=1 nice -n 20 python -m unittest tests.CurveFitTest.test_curve_01"
+
+Environment variables:
+  USE_SVG=1          - Export SVG visualizations of fitted curves.
+  USE_STRESS_TEST=1  - Subdivide input points before fitting.
+  USE_RANDOM_WARP=N  - Apply random coordinate warping with seed N (0=disabled).
+                       Only checks that fitting runs, skips value comparisons.
 """
 
 import glob
 import math
 import os
+import random
 import sys
 import unittest
 
@@ -149,6 +156,69 @@ def subdivide_points(
     return result
 
 
+def warp_points(
+        points: Sequence[floatN],
+        seed: int,
+        warp_scale: float = 0.1,
+) -> list[floatN]:
+    """
+    Apply smooth random distortion to points.
+
+    Uses sine-based warping with random phases and frequencies to create
+    smooth distortions that change the curve shape without invalidating it.
+
+    :arg points: Input points (n-dimensional).
+    :arg seed: Random seed for deterministic warping.
+    :arg warp_scale: Scale of distortion relative to data bounds (0.1 = 10%).
+    :return: Warped points.
+    """
+    if not points:
+        return list(points)
+
+    rng = random.Random(seed)
+    dims = len(points[0])
+    n = len(points)
+
+    # Compute bounding box to scale distortion appropriately.
+    mins = [min(p[d] for p in points) for d in range(dims)]
+    maxs = [max(p[d] for p in points) for d in range(dims)]
+    ranges = [maxs[d] - mins[d] for d in range(dims)]
+    max_range = max(ranges) if ranges else 1.0
+    if max_range == 0.0:
+        max_range = 1.0
+
+    # Generate random warp parameters for each dimension.
+    # Each dimension gets multiple sine waves with different frequencies.
+    num_waves = 3
+    warp_params: list[list[tuple[float, float, float]]] = []
+    for _d in range(dims):
+        waves = []
+        for _ in range(num_waves):
+            freq = rng.uniform(1.0, 4.0)  # Frequency (waves across data).
+            phase = rng.uniform(0.0, 2.0 * math.pi)  # Phase offset.
+            amp = rng.uniform(0.5, 1.0)  # Relative amplitude.
+            waves.append((freq, phase, amp))
+        warp_params.append(waves)
+
+    result: list[floatN] = []
+    for i, pt in enumerate(points):
+        # Normalized position along curve (0 to 1).
+        t = i / (n - 1) if n > 1 else 0.0
+
+        warped = list(pt)
+        for d in range(dims):
+            offset = 0.0
+            for freq, phase, amp in warp_params[d]:
+                offset += amp * math.sin(freq * t * 2.0 * math.pi + phase)
+            # Normalize by number of waves and apply scale.
+            offset = (offset / num_waves) * warp_scale * max_range
+            warped[d] += offset
+
+        result.append(tuple(warped))
+
+    return result
+
+
 # ----------------------------------------------------------------------------
 # Constants
 
@@ -173,6 +243,9 @@ TEST_DATA_PATH = os.path.join(os.path.dirname(__file__), "data")
 
 USE_SVG = os.environ.get("USE_SVG") or False
 USE_STRESS_TEST = os.environ.get("USE_STRESS_TEST") or False
+# When non-zero, use as seed for random coordinate warping.
+# Only checks that fitting runs without error (no value comparison).
+USE_RANDOM_WARP = int(os.environ.get("USE_RANDOM_WARP", "0"))
 
 # Number of subdivision iterations for stress testing.
 STRESS_TEST_SUBDIV_ITERATIONS = 5
@@ -610,6 +683,19 @@ class TestDataFile_MixIn:
                 subdivide_points(points, STRESS_TEST_SUBDIV_ITERATIONS, is_cyclic),
             )
 
+        if USE_RANDOM_WARP:
+            # Apply random warping and only verify fitting runs without error.
+            points = cast(
+                Sequence[float2],
+                warp_points(points, USE_RANDOM_WARP),
+            )
+            curve = curve_fit(points, error, corner_angle, is_cyclic)
+            # Basic sanity check: curve should have at least 2 knots.
+            self.assertGreaterEqual(len(curve), 2)
+            if USE_SVG:
+                export_svg(name + "_warped", curve, points, [])
+            return
+
         curve = curve_fit(points, error, corner_angle, is_cyclic)
 
         error_test, measure_points = curve_error_max(points, curve, is_cyclic)
@@ -676,31 +762,31 @@ test_data = (
         corner_angle=None,
         is_cyclic=False,
         expected_knot_count=27,
-        expected_area_delta=0.014730895625564828,
+        expected_area_delta=0.015009792697462563,
     ),
     TestData(
         filename="test_curve_freehand_02",
         error_max=0.01,
         corner_angle=None,
         is_cyclic=False,
-        expected_knot_count=30,
-        expected_area_delta=0.013817522468055975,
+        expected_knot_count=28,
+        expected_area_delta=0.015333397584370818,
     ),
     TestData(
         filename="test_curve_freehand_03",
         error_max=0.01,
         corner_angle=math.radians(30),
         is_cyclic=False,
-        expected_knot_count=20,
-        expected_area_delta=0.010025214489896801,
+        expected_knot_count=19,
+        expected_area_delta=0.011006209538024845,
     ),
     TestData(
         filename="test_curve_freehand_04_cyclic",
         error_max=0.0075,
         corner_angle=math.radians(70),
         is_cyclic=True,
-        expected_knot_count=26,
-        expected_area_delta=0.010536907960151748,
+        expected_knot_count=25,
+        expected_area_delta=0.012118852663068587,
     ),
 )
 

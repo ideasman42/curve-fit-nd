@@ -1,0 +1,23 @@
+[package]
+name = "curve_fit_nd"
+version = "0.1.0"
+edition = "2021"
+license = "BSD-3-Clause"
+description = "Attempt to fit a cubic bezier curve to a set of points"
+
+[lib]
+name = "curve_fit_nd"
+crate-type = ["staticlib"]
+
+[dependencies]
+libc = "0.2"
+
+[profile.release]
+# Link-time optimization for smaller/faster binary.
+lto = true
+# Single codegen unit for better optimization (slower compile).
+codegen-units = 1
+# Abort on panic (smaller binary, no unwinding).
+panic = "abort"
+# Strip symbols from binary.
+strip = true
