@@ -964,6 +964,12 @@ pub mod refine_refit {
         while let Some(r) = heap.pop_min() {
             knots_handle[r.index] = min_heap::NodeHandle::INVALID;
 
+            // Skip if curve is too small to simplify further.
+            // Check BEFORE updating handles to avoid partial updates.
+            if unlikely!(*knots_len_remaining <= 2) {
+                continue;
+            }
+
             let k_prev_index;
             let k_next_index;
             {
@@ -994,11 +1000,6 @@ pub mod refine_refit {
                 }
             }
             // finished with 'r'
-
-            // Skip if curve is too small to simplify further.
-            if unlikely!(*knots_len_remaining <= 2) {
-                continue;
-            }
 
             {
                 let k_old = &mut knots[r.index];
